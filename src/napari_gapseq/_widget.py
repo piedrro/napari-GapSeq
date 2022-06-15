@@ -93,7 +93,8 @@ class GapSeqTabWidget(QWidget):
 
         #register QWidgets/Controls
         self.localisation_channel = self.findChild(QComboBox,"localisation_channel")
-        self.localisation_import = self.findChild(QPushButton,"localisation_import")
+        self.localisation_import_image = self.findChild(QPushButton,"localisation_import_image")
+        self.localisation_import_NIM = self.findChild(QPushButton, "localisation_import_NIM")
         self.localisation_threshold = self.findChild(QSlider,"localisation_threshold")
         self.localisation_area_min = self.findChild(QSlider,"localisation_area_min")
         self.localisation_area_max = self.findChild(QSlider,"localisation_area_max")
@@ -108,6 +109,9 @@ class GapSeqTabWidget(QWidget):
         self.plot_mode = self.findChild(QComboBox,"plot_mode")
         self.plot_localisation_number = self.findChild(QSlider,"plot_localisation_number")
         self.plot_frame_number = self.findChild(QSlider,"plot_frame_number")
+        self.plot_localisation_class = self.findChild(QComboBox,"plot_localisation_class")
+        self.plot_localisation_classify = self.findChild(QPushButton,"plot_localisation_classify")
+        self.plot_localisation_filter = self.findChild(QComboBox,"plot_localisation_filter")
         self.plot_localisation_focus = self.findChild(QCheckBox,"plot_localisation_focus")
         self.graph_container = self.findChild(QWidget,"graph_container")
 
@@ -145,7 +149,8 @@ class GapSeqTabWidget(QWidget):
 
         self.localisation_bbox_size.valueChanged.connect(self.modify_bounding_boxes)
 
-        self.localisation_import.clicked.connect(self.import_localisation_file)
+        self.localisation_import_image.clicked.connect(self.import_localisation_image)
+        self.localisation_import_NIM.clicked.connect(self.import_localisation_NIM)
         self.localisation_detect.clicked.connect(self.detect_localisations)
 
         self.localisation_threshold.valueChanged.connect(self.threshold_image)
@@ -159,16 +164,49 @@ class GapSeqTabWidget(QWidget):
 
         self.load_dev.clicked.connect(self.load_dev_files)
 
-
         self.plot_mode.currentIndexChanged.connect(self.plot_graphs)
         self.plot_localisation_number.valueChanged.connect(self.plot_graphs)
         self.plot_frame_number.valueChanged.connect(self.plot_graphs)
 
         self.canvas.mpl_connect("button_press_event", self.update_dims_from_plot)
 
+
+        self.plot_localisation_classify.clicked.connect(self.classify_localisation)
+        self.plot_localisation_filter.currentIndexChanged.connect(self.filter_localisations)
+
+
+    def filter_localisations(self):
+
+        filter_class = self.plot_localisation_filter.currentText()
+
+        bounding_box_class = self.box_layer.metadata["bounding_box_class"]
+
+        if filter_class != "None":
+
+            localisation_number = bounding_box_class.count(int(filter_class))
+
+        else:
+
+            localisation_number = len(bounding_box_class)
+
+        self.plot_localisation_number.setMaximum(localisation_number - 1)
+
+        self.plot_graphs()
+
+
+    def classify_localisation(self):
+
+        new_class = self.plot_localisation_class.currentIndex()
+        localisation_number = self.plot_localisation_number.value()
+
+        self.box_layer.metadata["bounding_box_class"][localisation_number] = int(new_class)
+
+        self.plot_graphs()
+
+
     def load_dev_files(self):
 
-        self.import_localisation_file()
+        self.import_localisation_image()
         self.threshold_image()
         self.detect_localisations()
 
@@ -291,28 +329,76 @@ class GapSeqTabWidget(QWidget):
 
     def get_plot_data(self, layers):
 
+        filter_class = self.plot_localisation_filter.currentText()
+
         plot_data = []
 
         for layer in layers:
 
             if layer in self.viewer.layers:
 
-                frame_number = self.plot_frame_number.value()
-                localisation_number = self.plot_localisation_number.value()
+                if filter_class == "None":
 
-                bounding_box = self.box_layer.data[localisation_number]
-                image = self.viewer.layers[layer].data
+                    frame_number = self.plot_frame_number.value()
+                    localisation_number = self.plot_localisation_number.value()
 
-                [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = bounding_box
+                    bounding_box = self.box_layer.data[localisation_number]
+                    bounding_box_class = self.box_layer.metadata["bounding_box_class"][localisation_number]
 
-                vertialslice = image[:, int(y1):int(y2), int(x1):int(x2)]
-                data = np.mean(vertialslice, axis=(1, 2))
+                    image = self.viewer.layers[layer].data
 
-                if frame_number > image.shape[0]:
-                    frame_number = image.shape[0] - 1
+                    [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = bounding_box
 
-                plot_data.append({'layer_name': layer, 'data': data, 'spot': vertialslice[frame_number],
-                                  "current_frame":frame_number, "box": [x1,x2,y1,y2], "image_shape":image.shape})
+                    vertialslice = image[:, int(y1):int(y2), int(x1):int(x2)]
+                    data = np.mean(vertialslice, axis=(1, 2))
+
+                    if frame_number > image.shape[0]:
+                        frame_number = image.shape[0] - 1
+
+                    plot_data.append({'layer_name': layer, 'data': data, 'spot': vertialslice[frame_number],
+                                      "current_frame":frame_number, "box": [x1,x2,y1,y2], "image_shape":image.shape,
+                                      "bounding_box_class": bounding_box_class,
+                                      "localisation_number": localisation_number})
+
+                if filter_class != "None":
+
+                    frame_number = self.plot_frame_number.value()
+                    localisation_number = self.plot_localisation_number.value()
+
+                    bounding_box_class = self.box_layer.metadata["bounding_box_class"]
+                    localisation_positions = np.where(np.array(bounding_box_class) == int(filter_class))[0].tolist()
+
+                    if len(localisation_positions) > 0:
+
+                        localisation_number = localisation_positions[localisation_number]
+
+                        self.label.setText(str(localisation_number))
+
+                        bounding_box = self.box_layer.data[localisation_number]
+                        bounding_box_class = self.box_layer.metadata["bounding_box_class"][localisation_number]
+
+                        if int(filter_class) == bounding_box_class and localisation_number >= 0:
+
+                            image = self.viewer.layers[layer].data
+
+                            [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = bounding_box
+
+                            vertialslice = image[:, int(y1):int(y2), int(x1):int(x2)]
+                            data = np.mean(vertialslice, axis=(1, 2))
+
+                            if frame_number > image.shape[0]:
+                                frame_number = image.shape[0] - 1
+
+                            plot_data.append({'layer_name': layer, 'data': data, 'spot': vertialslice[frame_number],
+                                              "current_frame": frame_number, "box": [x1, x2, y1, y2],
+                                              "image_shape": image.shape,
+                                              "bounding_box_class": bounding_box_class,
+                                              "localisation_number": localisation_number})
+                    else:
+
+                        self.canvas.figure.clf()
+                        self.canvas.draw()
+
 
         return plot_data
 
@@ -326,33 +412,42 @@ class GapSeqTabWidget(QWidget):
         if maximum_width != 0:
             self.graph_container.setMaximumHeight(maximum_width)
 
-        for i in range(len(plot_data)):
+        if len(plot_data) > 0:
 
-            plot_index = int(f"{len(plot_data)}1{i+1}")
-            # spot_index = int(f"{len(plot_data)}2{i+2}")
+            bounding_box_class = plot_data[0]["bounding_box_class"]
+            self.plot_localisation_class.setCurrentIndex(bounding_box_class)
 
-            axes = self.canvas.figure.add_subplot(plot_index)
-            layer_name = plot_data[i]["layer_name"]
-            spot = plot_data[i]["spot"]
+            for i in range(len(plot_data)):
 
-            y = plot_data[i]["data"]
-            x = np.arange(len(y))
+                plot_index = int(f"{len(plot_data)}1{i+1}")
 
-            axes.set_facecolor("#262930")
-            axes.plot(x, y, label = layer_name)
-            axes.legend()
+                axes = self.canvas.figure.add_subplot(plot_index)
+                layer_name = plot_data[i]["layer_name"]
+                bounding_box_class = plot_data[i]["bounding_box_class"]
+                localisation_number = plot_data[i]["localisation_number"]
 
-            ymin, ymax = axes.get_ylim()
-            current_frame = int(self.viewer.dims.current_step[0])
+                y = plot_data[i]["data"]
+                x = np.arange(len(y))
 
-            if current_frame < len(x):
-                axes.plot([current_frame,current_frame],[ymin, ymax], color = "red", label = "Frame")
+                axes.set_facecolor("#262930")
+                axes.plot(x, y, label = layer_name)
+                axes.plot([], [], ' ', label=f"#:{localisation_number}   Class:{bounding_box_class}")
+                axes.legend()
 
-            # spot_axes = canvas.figure.add_subplot(spot_index)
-            # spot_axes.imshow(spot)
+                ymin, ymax = axes.get_ylim()
+                current_frame = int(self.viewer.dims.current_step[0])
 
-        self.canvas.figure.tight_layout()
-        self.canvas.draw()
+                if current_frame < len(x):
+                    axes.plot([current_frame,current_frame],[ymin, ymax], color = "red", label = "Frame")
+
+            self.canvas.figure.tight_layout()
+            self.canvas.draw()
+
+        else:
+            self.canvas.figure.clf()
+            self.canvas.draw()
+
+
 
 
 
@@ -466,6 +561,7 @@ class GapSeqTabWidget(QWidget):
 
             polygons = []
             bounding_box_centres = []
+            bounding_box_class = []
 
             for i in range(len(contours)):
 
@@ -489,6 +585,7 @@ class GapSeqTabWidget(QWidget):
 
                         polygons.append(polygon)
                         bounding_box_centres.append([cx,cy])
+                        bounding_box_class.append(0)
 
                 except:
                     pass
@@ -496,6 +593,7 @@ class GapSeqTabWidget(QWidget):
             if len(polygons) > 0:
 
                 meta["bounding_box_centres"] = bounding_box_centres
+                meta["bounding_box_class"] = bounding_box_class
 
                 self.plot_localisation_number.setMaximum(len(polygons)-1)
 
@@ -509,8 +607,40 @@ class GapSeqTabWidget(QWidget):
                     self.box_layer.mouse_drag_callbacks.append(self.localisation_click_events)
 
 
+    def import_localisation_NIM(self):
 
-    def import_localisation_file(self):
+        path = r"C:/napari-gapseq/src/napari_gapseq/dev/20220527_27thMay2022GAP36A/27thMay2022GAPSeq4onebyonesubstrategAPGS8FRETfoursea50nMconce2_GAPSeqonebyoneGAP36AL532Exp200_locImage.tiff"
+
+        localisation_threshold_value = self.localisation_threshold.value()
+        image, meta = self.read_image_file(path, 0)
+
+        image = np.moveaxis(image, -1, 0)
+
+        image = np.mean(image,axis=0).astype(np.uint8)
+
+        _, localisation_mask = cv.threshold(image, localisation_threshold_value, 255, cv.THRESH_BINARY)
+
+        localisation_threshold_image = np.hstack((image, localisation_mask))
+
+        if "localisation_image" in self.viewer.layers:
+            self.localisation_image_layer.data = image
+            self.localisation_image_layer.metadata = meta
+            self.localisation_threshold_layer.data = localisation_threshold_image
+            self.localisation_threshold_layer.metadata = meta
+        else:
+            self.localisation_image_layer = self.viewer.add_image(image, name="localisation_image",metadata=meta)
+            self.localisation_threshold_layer = self.viewer.add_image(localisation_threshold_image, name="localisation_threshold", metadata=meta)
+
+            self.localisation_image_layer.mouse_drag_callbacks.append(self.localisation_click_events)
+            self.localisation_threshold_layer.mouse_drag_callbacks.append(self.localisation_click_events)
+
+        self.plot_frame_number.setMaximum(image.shape[0]-1)
+
+        self.viewer.reset_view()
+        self.sort_layer_order()
+
+
+    def import_localisation_image(self):
 
         path = r"C:/napari-gapseq/src/napari_gapseq/dev/20220527_27thMay2022GAP36A/27thMay2022GAPSeq4onebyonesubstrategAPGS8FRETfoursea50nMconce2_GAPSeqonebyoneGAP36AL532Exp200.tif"
 
@@ -662,9 +792,14 @@ class GapSeqTabWidget(QWidget):
         self.slider = self.findChild(QSlider, slider_name)
         self.label = self.findChild(QLabel, label_name)
 
-        slider_value = self.slider.value()
+        if slider_name == "plot_localisation_number" and self.plot_localisation_filter.currentText() != "None":
 
-        self.label.setText(str(slider_value))
+            pass
+
+        else:
+
+            slider_value = self.slider.value()
+            self.label.setText(str(slider_value))
 
 
 
