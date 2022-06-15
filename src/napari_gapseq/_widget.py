@@ -190,6 +190,7 @@ class GapSeqTabWidget(QWidget):
             localisation_number = len(bounding_box_class)
 
         self.plot_localisation_number.setMaximum(localisation_number - 1)
+        self.plot_localisation_number.setMinimum(0)
 
         self.plot_graphs()
 
@@ -342,23 +343,25 @@ class GapSeqTabWidget(QWidget):
                     frame_number = self.plot_frame_number.value()
                     localisation_number = self.plot_localisation_number.value()
 
-                    bounding_box = self.box_layer.data[localisation_number]
-                    bounding_box_class = self.box_layer.metadata["bounding_box_class"][localisation_number]
+                    if localisation_number != -1:
 
-                    image = self.viewer.layers[layer].data
+                        bounding_box = self.box_layer.data[localisation_number]
+                        bounding_box_class = self.box_layer.metadata["bounding_box_class"][localisation_number]
 
-                    [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = bounding_box
+                        image = self.viewer.layers[layer].data
 
-                    vertialslice = image[:, int(y1):int(y2), int(x1):int(x2)]
-                    data = np.mean(vertialslice, axis=(1, 2))
+                        [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = bounding_box
 
-                    if frame_number > image.shape[0]:
-                        frame_number = image.shape[0] - 1
+                        vertialslice = image[:, int(y1):int(y2), int(x1):int(x2)]
+                        data = np.mean(vertialslice, axis=(1, 2))
 
-                    plot_data.append({'layer_name': layer, 'data': data, 'spot': vertialslice[frame_number],
-                                      "current_frame":frame_number, "box": [x1,x2,y1,y2], "image_shape":image.shape,
-                                      "bounding_box_class": bounding_box_class,
-                                      "localisation_number": localisation_number})
+                        if frame_number > image.shape[0]:
+                            frame_number = image.shape[0] - 1
+
+                        plot_data.append({'layer_name': layer, 'data': data, 'spot': vertialslice[frame_number],
+                                          "current_frame":frame_number, "box": [x1,x2,y1,y2], "image_shape":image.shape,
+                                          "bounding_box_class": bounding_box_class,
+                                          "localisation_number": localisation_number})
 
                 if filter_class != "None":
 
@@ -372,32 +375,30 @@ class GapSeqTabWidget(QWidget):
 
                         localisation_number = localisation_positions[localisation_number]
 
-                        self.label.setText(str(localisation_number))
+                        if localisation_number != -1:
 
-                        bounding_box = self.box_layer.data[localisation_number]
-                        bounding_box_class = self.box_layer.metadata["bounding_box_class"][localisation_number]
+                            self.label.setText(str(localisation_number))
 
-                        if int(filter_class) == bounding_box_class and localisation_number >= 0:
+                            bounding_box = self.box_layer.data[localisation_number]
+                            bounding_box_class = self.box_layer.metadata["bounding_box_class"][localisation_number]
 
-                            image = self.viewer.layers[layer].data
+                            if int(filter_class) == bounding_box_class and localisation_number >= 0:
 
-                            [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = bounding_box
+                                image = self.viewer.layers[layer].data
 
-                            vertialslice = image[:, int(y1):int(y2), int(x1):int(x2)]
-                            data = np.mean(vertialslice, axis=(1, 2))
+                                [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = bounding_box
 
-                            if frame_number > image.shape[0]:
-                                frame_number = image.shape[0] - 1
+                                vertialslice = image[:, int(y1):int(y2), int(x1):int(x2)]
+                                data = np.mean(vertialslice, axis=(1, 2))
 
-                            plot_data.append({'layer_name': layer, 'data': data, 'spot': vertialslice[frame_number],
-                                              "current_frame": frame_number, "box": [x1, x2, y1, y2],
-                                              "image_shape": image.shape,
-                                              "bounding_box_class": bounding_box_class,
-                                              "localisation_number": localisation_number})
-                    else:
+                                if frame_number > image.shape[0]:
+                                    frame_number = image.shape[0] - 1
 
-                        self.canvas.figure.clf()
-                        self.canvas.draw()
+                                plot_data.append({'layer_name': layer, 'data': data, 'spot': vertialslice[frame_number],
+                                                  "current_frame": frame_number, "box": [x1, x2, y1, y2],
+                                                  "image_shape": image.shape,
+                                                  "bounding_box_class": bounding_box_class,
+                                                  "localisation_number": localisation_number})
 
 
         return plot_data
@@ -605,6 +606,8 @@ class GapSeqTabWidget(QWidget):
                 else:
                     self.box_layer = self.viewer.add_shapes(polygons, name = "bounding_boxes", shape_type='Rectangle', edge_width=1, edge_color='red', face_color=[0, 0, 0, 0], opacity=0.3, metadata=meta)
                     self.box_layer.mouse_drag_callbacks.append(self.localisation_click_events)
+
+                self.plot_graphs()
 
 
     def import_localisation_NIM(self):
