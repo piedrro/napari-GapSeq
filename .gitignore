@@ -83,3 +83,4 @@ venv/
 # written by setuptools_scm
 **/_version.py
 /src/napari_gapseq/dev/
+/src/napari_gapseq/data.json
