@@ -39,7 +39,7 @@
       <item row="0" column="1">
        <widget class="QComboBox" name="localisation_channel">
         <property name="currentIndex">
-         <number>0</number>
+         <number>1</number>
         </property>
         <item>
          <property name="text">
@@ -398,7 +398,7 @@
       <item row="0" column="1">
        <widget class="QComboBox" name="image_import_channel">
         <property name="currentIndex">
-         <number>0</number>
+         <number>2</number>
         </property>
         <item>
          <property name="text">
