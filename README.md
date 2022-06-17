@@ -7,8 +7,12 @@
 [![codecov](https://codecov.io/gh/piedrro/napari-gapseq/branch/main/graph/badge.svg)](https://codecov.io/gh/piedrro/napari-gapseq)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/napari-gapseq)](https://napari-hub.org/plugins/napari-gapseq)
 
-AKGROUP GAPSEQ Analysis
+GapSeq Analysis for Gene Machines Group, Deparment of Physics, Oxford
 
+https://kapanidis.web.ox.ac.uk/
+
+Developed by Piers Turner
+piers.turner@physics.ox.ac.uk
 ----------------------------------
 
 This [napari] plugin was generated with [Cookiecutter] using [@napari]'s [cookiecutter-napari-plugin] template.
