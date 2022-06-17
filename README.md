@@ -35,9 +35,11 @@ You can install `napari-gapseq` via [pip]:
 
     pip install git+https://github.com/piedrro/napari-gapseq.git
 
+    To open Napari (with GapSeq Widget), use comand "Napari"
 
 
-To install latest development version :
+
+To update to latest version (once installed):
 
     pip install git+https://github.com/piedrro/napari-gapseq.git
 
