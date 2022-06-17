@@ -11,8 +11,6 @@ GapSeq Analysis for Gene Machines Group, Deparment of Physics, Oxford
 
 https://kapanidis.web.ox.ac.uk/
 
-Developed by Piers Turner
-piers.turner@physics.ox.ac.uk
 ----------------------------------
 
 This [napari] plugin was generated with [Cookiecutter] using [@napari]'s [cookiecutter-napari-plugin] template.
