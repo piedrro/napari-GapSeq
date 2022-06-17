@@ -404,8 +404,8 @@ class Ui_TabWidget(object):
 
         self.retranslateUi(TabWidget)
         TabWidget.setCurrentIndex(0)
-        self.localisation_channel.setCurrentIndex(0)
-        self.image_import_channel.setCurrentIndex(0)
+        self.localisation_channel.setCurrentIndex(1)
+        self.image_import_channel.setCurrentIndex(2)
         QtCore.QMetaObject.connectSlotsByName(TabWidget)
 
     def retranslateUi(self, TabWidget):

@@ -175,6 +175,31 @@ class GapSeqTabWidget(QWidget):
 
         self.gapseq_export_traces.clicked.connect(self.export_traces)
 
+        self.viewer.bind_key(key="Control-0", func=partial(self.keyboard_events, key=0), overwrite=True)
+        self.viewer.bind_key(key="Control-1", func=partial(self.keyboard_events, key=1), overwrite=True)
+        self.viewer.bind_key(key="Control-2", func=partial(self.keyboard_events, key=2), overwrite=True)
+        self.viewer.bind_key(key="Control-3", func=partial(self.keyboard_events, key=3), overwrite=True)
+        self.viewer.bind_key(key="Control-4", func=partial(self.keyboard_events, key=4), overwrite=True)
+        self.viewer.bind_key(key="Control-5", func=partial(self.keyboard_events, key=5), overwrite=True)
+        self.viewer.bind_key(key="Control-6", func=partial(self.keyboard_events, key=6), overwrite=True)
+        self.viewer.bind_key(key="Control-7", func=partial(self.keyboard_events, key=7), overwrite=True)
+        self.viewer.bind_key(key="Control-8", func=partial(self.keyboard_events, key=8), overwrite=True)
+        self.viewer.bind_key(key="Control-9", func=partial(self.keyboard_events, key=9), overwrite=True)
+
+
+
+    def keyboard_events(self,viewer,key):
+
+        if "bounding_boxes" in self.viewer.layers:
+
+            if "bounding_box_data" in self.box_layer.metadata.keys():
+
+                localisation_number = self.plot_localisation_number.value()
+
+                self.box_layer.metadata["bounding_box_class"][localisation_number] = int(key)
+
+                self.plot_graphs()
+
 
     def export_traces(self):
 
