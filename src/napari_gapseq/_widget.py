@@ -115,6 +115,7 @@ class GapSeqTabWidget(QWidget):
         self.gapseq_import_localisations = self.findChild(QPushButton,"gapseq_import_localisations")
         self.gapseq_import_all = self.findChild(QPushButton, "gapseq_import_all")
         self.gapseq_export_traces = self.findChild(QPushButton, "gapseq_export_traces")
+        self.gapseq_export_traces_filter = self.findChild(QComboBox, "gapseq_export_traces_filter")
 
         self.graph_container.setLayout(QVBoxLayout())
         self.graph_container.setMinimumWidth(100)
@@ -172,7 +173,6 @@ class GapSeqTabWidget(QWidget):
 
         self.gapseq_import_localisations.clicked.connect(partial(self.import_gapseq_data, mode = 'localisations'))
         self.gapseq_import_all.clicked.connect(partial(self.import_gapseq_data, mode='all'))
-
         self.gapseq_export_traces.clicked.connect(self.export_traces)
 
         self.viewer.bind_key(key="Control-0", func=partial(self.keyboard_events, key=0), overwrite=True)
