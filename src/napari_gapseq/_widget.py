@@ -94,7 +94,6 @@ class GapSeqTabWidget(QWidget):
         #register QWidgets/Controls
         self.localisation_channel = self.findChild(QComboBox,"localisation_channel")
         self.localisation_import_image = self.findChild(QPushButton,"localisation_import_image")
-        self.localisation_import_NIM = self.findChild(QPushButton, "localisation_import_NIM")
         self.localisation_threshold = self.findChild(QSlider,"localisation_threshold")
         self.localisation_area_min = self.findChild(QSlider,"localisation_area_min")
         self.localisation_area_max = self.findChild(QSlider,"localisation_area_max")
@@ -117,8 +116,10 @@ class GapSeqTabWidget(QWidget):
         self.plot_localisation_focus = self.findChild(QCheckBox,"plot_localisation_focus")
         self.graph_container = self.findChild(QWidget,"graph_container")
         self.gapseq_export_data = self.findChild(QPushButton,"gapseq_export_data")
+        self.gapseq_export_at_import = self.findChild(QCheckBox,"gapseq_export_at_import")
         self.gapseq_import_localisations = self.findChild(QPushButton,"gapseq_import_localisations")
         self.gapseq_import_all = self.findChild(QPushButton, "gapseq_import_all")
+        self.gapseq_export_traces = self.findChild(QPushButton, "gapseq_export_traces")
 
         self.graph_container.setLayout(QVBoxLayout())
         # self.graph_container.setMaximumHeight(500)
@@ -155,7 +156,6 @@ class GapSeqTabWidget(QWidget):
         self.localisation_bbox_size.valueChanged.connect(self.modify_bounding_boxes)
 
         self.localisation_import_image.clicked.connect(self.import_localisation_image)
-        self.localisation_import_NIM.clicked.connect(self.import_localisation_NIM)
         self.localisation_detect.clicked.connect(self.detect_localisations)
 
         self.localisation_threshold.valueChanged.connect(self.threshold_image)
@@ -185,81 +185,150 @@ class GapSeqTabWidget(QWidget):
         self.gapseq_import_localisations.clicked.connect(partial(self.import_gapseq_data, mode = 'localisations'))
         self.gapseq_import_all.clicked.connect(partial(self.import_gapseq_data, mode='all'))
 
+        self.gapseq_export_traces.clicked.connect(self.export_traces)
+
+
+    def export_traces(self):
+
+        if "bounding_boxes" in self.viewer.layers:
+
+            if "bounding_box_data" in self.box_layer.metadata.keys():
+
+                box_num = len(self.box_layer.data.copy())
+
+                meta = self.box_layer.metadata.copy()
+
+                bounding_box_data = meta["bounding_box_data"]
+                bounding_box_class = meta["bounding_box_class"]
+
+                layers = bounding_box_data.keys()
+
+                image_trace_index = []
+                image_trace_layer = []
+                image_trace_class = []
+                image_trace_data = []
+                localisation_trace_index = []
+                localisation_trace_layer = []
+                localisation_trace_class = []
+                localisation_trace_data = []
+
+                for i in range(box_num):
+
+                    for layer in layers:
+
+                        box_data = bounding_box_data[layer][i]
+                        box_class = bounding_box_class[i]
+
+                        if layer == "localisation_image":
+
+                            localisation_trace_data.append(box_data)
+
+                            localisation_trace_index.append(i)
+                            localisation_trace_class.append(box_class)
+                            localisation_trace_layer.append(layer)
+
+                        else:
+
+                            image_trace_data.append(box_data)
+
+                            image_trace_index.append(i)
+                            image_trace_class.append(box_class)
+                            image_trace_layer.append(layer)
+
+                image_trace_data = pd.DataFrame(np.array(image_trace_data).T)
+                localisation_trace_data = pd.DataFrame(np.array(localisation_trace_data).T)
+
+                image_trace_data.columns = [image_trace_index,image_trace_layer,image_trace_class]
+                localisation_trace_data.columns = [localisation_trace_index, localisation_trace_layer, localisation_trace_class]
+
+                desktop = os.path.expanduser("~/Desktop")
+                path = os.path.join(desktop,"gapseq_traces.xlsx")
+
+                with pd.ExcelWriter(path) as writer:
+                    localisation_trace_data.to_excel(writer, sheet_name='Localisation Data', index=True, startrow=1, startcol=1)
+                    image_trace_data.to_excel(writer, sheet_name='Image Data', index=True, startrow=1,startcol=1)
+
+
 
 
     def import_gapseq_data(self, mode = "all"):
 
-        with open('gapseq.txt', 'r', encoding='utf-8') as f:
-            gapseq_data = json.load(f)
+        desktop = os.path.expanduser("~/Desktop")
+        path, _ = QFileDialog.getOpenFileName(self, "Open Files", desktop, "GapSeq Files (*.txt)")
 
-        bounding_boxes = gapseq_data["bounding_boxes"]
+        if os.path.isfile(path):
 
-        image_layers = gapseq_data["image_layers"]
-        image_paths = gapseq_data["image_paths"]
-        image_metadata = gapseq_data["image_metadata"]
-        localisation_threshold = gapseq_data["localisation_threshold"]
-        meta = {}
+            with open(path, 'r', encoding='utf-8') as f:
+                gapseq_data = json.load(f)
 
-        if mode == "all":
+            bounding_boxes = gapseq_data["bounding_boxes"]
 
-            for i in range(len(image_paths)):
+            image_layers = gapseq_data["image_layers"]
+            image_paths = gapseq_data["image_paths"]
+            image_metadata = gapseq_data["image_metadata"]
+            localisation_threshold = gapseq_data["localisation_threshold"]
+            meta = {}
 
-                path = image_paths[i]
-                layer_name = image_layers[i]
-                meta = image_metadata[i]
+            if mode == "all":
 
-                meta["path"] = path
-                meta["localisation_threshold"] = gapseq_data["localisation_threshold"]
+                for i in range(len(image_paths)):
 
-                if layer_name == "localisation_image":
+                    path = image_paths[i]
+                    layer_name = image_layers[i]
+                    meta = image_metadata[i]
 
-                    self.import_localisation_image(meta = meta, import_gapseq=True)
+                    meta["path"] = path
+                    meta["localisation_threshold"] = gapseq_data["localisation_threshold"]
 
-                else:
+                    if layer_name == "localisation_image":
 
-                    gap_code = meta["gap_code"]
-                    seq_code = meta["seq_code"]
-                    crop_mode = meta["crop_mode"]
-
-                    layer_name = f"GAP-{gap_code}:SEQ-{seq_code}"
-
-                    image, meta = self.read_image_file(path, crop_mode)
-
-                    meta["gap_code"] = gap_code
-                    meta["seq_code"] = seq_code
-
-                    if layer_name in self.viewer.layers:
-
-                        self.viewer.layers[layer_name].data = image
-                        self.viewer.layers[layer_name].metadata = meta
+                        self.import_localisation_image(meta = meta, import_gapseq=True)
 
                     else:
 
-                        setattr(self, layer_name, self.viewer.add_image(image, name=layer_name, metadata=meta))
-                        self.viewer.layers[layer_name].mouse_drag_callbacks.append(self.localisation_click_events)
+                        gap_code = meta["gap_code"]
+                        seq_code = meta["seq_code"]
+                        crop_mode = meta["crop_mode"]
 
-        meta["bounding_box_centres"] = gapseq_data["bounding_box_centres"]
-        meta["bounding_box_class"] = gapseq_data["bounding_box_class"]
-        meta["localisation_threshold"] = gapseq_data["localisation_threshold"]
-        meta["bounding_box_size"] = gapseq_data["bounding_box_size"]
-        meta["image_layers"] = gapseq_data["image_layers"]
-        meta["bounding_box_data"] = gapseq_data["bounding_box_data"]
-        meta["image_paths"] = gapseq_data["image_paths"]
-        meta["image_metadata"] = gapseq_data["image_metadata"]
-        meta["layer_image_shape"] = gapseq_data["layer_image_shape"]
+                        layer_name = f"GAP-{gap_code}:SEQ-{seq_code}"
 
-        if "bounding_boxes" in self.viewer.layers:
+                        image, meta = self.read_image_file(path, crop_mode)
 
-            self.viewer.layers["bounding_boxes"].data = bounding_boxes
-            self.viewer.layers["bounding_boxes"].metadata = meta
+                        meta["gap_code"] = gap_code
+                        meta["seq_code"] = seq_code
 
-        else:
+                        if layer_name in self.viewer.layers:
 
-            self.box_layer = self.viewer.add_shapes(bounding_boxes, name="bounding_boxes", shape_type='Rectangle', edge_width=1, edge_color='red', face_color=[0, 0, 0, 0], opacity=0.3, metadata=gapseq_data)
-            self.box_layer.mouse_drag_callbacks.append(self.localisation_click_events)
+                            self.viewer.layers[layer_name].data = image
+                            self.viewer.layers[layer_name].metadata = meta
 
-        self.sort_layer_order()
-        self.plot_graphs()
+                        else:
+
+                            setattr(self, layer_name, self.viewer.add_image(image, name=layer_name, metadata=meta))
+                            self.viewer.layers[layer_name].mouse_drag_callbacks.append(self.localisation_click_events)
+
+            meta["bounding_box_centres"] = gapseq_data["bounding_box_centres"]
+            meta["bounding_box_class"] = gapseq_data["bounding_box_class"]
+            meta["localisation_threshold"] = gapseq_data["localisation_threshold"]
+            meta["bounding_box_size"] = gapseq_data["bounding_box_size"]
+            meta["image_layers"] = gapseq_data["image_layers"]
+            meta["bounding_box_data"] = gapseq_data["bounding_box_data"]
+            meta["image_paths"] = gapseq_data["image_paths"]
+            meta["image_metadata"] = gapseq_data["image_metadata"]
+            meta["layer_image_shape"] = gapseq_data["layer_image_shape"]
+
+            if "bounding_boxes" in self.viewer.layers:
+
+                self.viewer.layers["bounding_boxes"].data = bounding_boxes
+                self.viewer.layers["bounding_boxes"].metadata = meta
+
+            else:
+
+                self.box_layer = self.viewer.add_shapes(bounding_boxes, name="bounding_boxes", shape_type='Rectangle', edge_width=1, edge_color='red', face_color=[0, 0, 0, 0], opacity=0.3, metadata=gapseq_data)
+                self.box_layer.mouse_drag_callbacks.append(self.localisation_click_events)
+
+            self.sort_layer_order()
+            self.plot_graphs()
 
 
     def export_data(self):
@@ -273,7 +342,7 @@ class GapSeqTabWidget(QWidget):
                 bounding_boxes = [box.tolist() for box in bounding_boxes]
 
                 meta = self.box_layer.metadata.copy()
-
+#
                 bounding_box_data = meta["bounding_box_data"]
                 bounding_box_centres = meta["bounding_box_centres"]
                 bounding_box_class = meta["bounding_box_class"]
@@ -281,27 +350,49 @@ class GapSeqTabWidget(QWidget):
                 layer_image_shape = meta["layer_image_shape"]
 
                 if "image_paths" not in meta.keys():
+
                     image_layers = [layer.name for layer in self.viewer.layers if layer.name not in ["bounding_boxes", "localisation_threshold"]]
                     image_paths = [self.viewer.layers[layer].metadata["image_path"] for layer in image_layers]
                     image_metadata = [self.viewer.layers[layer].metadata for layer in image_layers]
+
+                    path = self.viewer.layers["localisation_image"].metadata["path"]
+
+
                 else:
                     image_paths = meta["image_paths"]
                     image_metadata = meta["image_metadata"]
                     image_layers = meta["image_layers"]
 
-                gapseq_data = dict(bounding_boxes=bounding_boxes,
-                                   bounding_box_centres=bounding_box_centres,
-                                   bounding_box_class=bounding_box_class,
-                                   localisation_threshold = self.localisation_threshold.value(),
-                                   bounding_box_size=bounding_box_size,
-                                   image_layers = image_layers,
-                                   bounding_box_data = bounding_box_data,
-                                   image_paths = image_paths,
-                                   image_metadata = image_metadata,
-                                   layer_image_shape = layer_image_shape)
+                    path = image_paths[image_layers.index("localisation_image")]
 
-                with open('gapseq.txt', 'w', encoding='utf-8') as f:
-                    json.dump(gapseq_data, f, ensure_ascii=False, indent=4)
+                file_name = os.path.basename(path)
+                directory = path.replace(file_name,"")
+
+                extension = file_name.split(".")[-1]
+                file_name = file_name.replace("."+extension,"_gapseq.txt")
+
+                if self.gapseq_export_at_import.isChecked() is False:
+
+                    desktop = os.path.expanduser("~/Desktop")
+                    directory = QFileDialog.getExistingDirectory(self, "Select Directory", desktop)
+
+                if os.path.isdir(directory):
+
+                    path = os.path.abspath(os.path.join(directory,file_name))
+
+                    gapseq_data = dict(bounding_boxes=bounding_boxes,
+                                       bounding_box_centres=bounding_box_centres,
+                                       bounding_box_class=bounding_box_class,
+                                       localisation_threshold = self.localisation_threshold.value(),
+                                       bounding_box_size=bounding_box_size,
+                                       image_layers = image_layers,
+                                       bounding_box_data = bounding_box_data,
+                                       image_paths = image_paths,
+                                       image_metadata = image_metadata,
+                                       layer_image_shape = layer_image_shape)
+
+                    with open(path, 'w', encoding='utf-8') as f:
+                        json.dump(gapseq_data, f, ensure_ascii=False, indent=4)
 
 
     def compute_plot_data(self):
@@ -822,42 +913,6 @@ class GapSeqTabWidget(QWidget):
                     self.box_layer = self.viewer.add_shapes(polygons, name = "bounding_boxes", shape_type='Rectangle', edge_width=1, edge_color='red', face_color=[0, 0, 0, 0], opacity=0.3, metadata=meta)
                     self.box_layer.mouse_drag_callbacks.append(self.localisation_click_events)
 
-
-    def import_localisation_NIM(self):
-
-        path = r"C:/napari-gapseq/src/napari_gapseq/dev/20220527_27thMay2022GAP36A/27thMay2022GAPSeq4onebyonesubstrategAPGS8FRETfoursea50nMconce2_GAPSeqonebyoneGAP36AL532Exp200_locImage.tiff"
-
-        localisation_threshold = self.localisation_threshold.value()
-
-        image, meta = self.read_image_file(path, 0)
-
-        image = np.moveaxis(image, -1, 0)
-
-        image = np.mean(image,axis=0).astype(np.uint8)
-
-        _, localisation_mask = cv.threshold(image, localisation_threshold, 255, cv.THRESH_BINARY)
-
-        localisation_threshold_image = np.hstack((image, localisation_mask))
-
-        if "localisation_image" in self.viewer.layers:
-
-            self.localisation_image_layer.data = image
-            self.localisation_image_layer.metadata = meta
-            self.localisation_threshold_layer.data = localisation_threshold_image
-            self.localisation_threshold_layer.metadata = meta
-        else:
-            self.localisation_image_layer = self.viewer.add_image(image, name="localisation_image",metadata=meta)
-            self.localisation_threshold_layer = self.viewer.add_image(localisation_threshold_image, name="localisation_threshold", metadata=meta)
-
-            self.localisation_image_layer.mouse_drag_callbacks.append(self.localisation_click_events)
-            self.localisation_threshold_layer.mouse_drag_callbacks.append(self.localisation_click_events)
-
-        self.plot_frame_number.setMaximum(image.shape[0]-1)
-
-        self.viewer.reset_view()
-        self.sort_layer_order()
-
-
     def import_localisation_image(self, meta = [], import_gapseq = False):
 
         path = r"C:/napari-gapseq/src/napari_gapseq/dev/20220527_27thMay2022GAP36A/27thMay2022GAPSeq4onebyonesubstrategAPGS8FRETfoursea50nMconce2_GAPSeqonebyoneGAP36AL532Exp200.tif"
@@ -877,59 +932,64 @@ class GapSeqTabWidget(QWidget):
             localisation_threshold = self.localisation_threshold.value()
             crop_mode = self.localisation_channel.currentIndex()
 
-        if "_locImage" in path:
+            desktop = os.path.expanduser("~/Desktop")
+            path, _ = QFileDialog.getOpenFileName(self, "Open Files", desktop, "NIM Image File (*.tif);; NIM Localisation File (*.tiff)")
 
-            image, meta = self.read_image_file(path, 0)
-            meta["crop_mode"] = 0
+        if os.path.isfile(path):
 
-            image = np.moveaxis(image, -1, 0)
-            image = np.mean(image, axis=0).astype(np.uint8)
+            if "_locImage" in path:
 
-            _, localisation_mask = cv.threshold(image, localisation_threshold, 255, cv.THRESH_BINARY)
+                image, meta = self.read_image_file(path, 0)
+                meta["crop_mode"] = 0
 
-            localisation_threshold_image = np.hstack((image,localisation_mask))
+                image = np.moveaxis(image, -1, 0)
+                image = np.mean(image, axis=0).astype(np.uint8)
 
-            meta["localisation_threshold"] = localisation_threshold
-            meta["path"] = path
+                _, localisation_mask = cv.threshold(image, localisation_threshold, 255, cv.THRESH_BINARY)
 
-        else:
+                localisation_threshold_image = np.hstack((image,localisation_mask))
 
-            image, meta = self.read_image_file(path,crop_mode)
-            meta["crop_mode"] = crop_mode
+                meta["localisation_threshold"] = localisation_threshold
+                meta["path"] = path
 
-            img = np.max(image, axis=0)
-            img = normalize99(img)
-            img = rescale01(img) * 255
-            img = img.astype(np.uint8)
+            else:
 
-            localisation_mask_image = cv.fastNlMeansDenoising(img, h=30, templateWindowSize=5, searchWindowSize=31)
-            _, localisation_mask = cv.threshold(localisation_mask_image, localisation_threshold, 255, cv.THRESH_BINARY)
+                image, meta = self.read_image_file(path,crop_mode)
+                meta["crop_mode"] = crop_mode
 
-            localisation_threshold_image = np.hstack((localisation_mask_image,localisation_mask))
+                img = np.max(image, axis=0)
+                img = normalize99(img)
+                img = rescale01(img) * 255
+                img = img.astype(np.uint8)
 
-            meta["localisation_threshold"] = localisation_threshold
-            meta["path"] = path
+                localisation_mask_image = cv.fastNlMeansDenoising(img, h=30, templateWindowSize=5, searchWindowSize=31)
+                _, localisation_mask = cv.threshold(localisation_mask_image, localisation_threshold, 255, cv.THRESH_BINARY)
+
+                localisation_threshold_image = np.hstack((localisation_mask_image,localisation_mask))
+
+                meta["localisation_threshold"] = localisation_threshold
+                meta["path"] = path
 
 
-        if "localisation_image" in self.viewer.layers:
+            if "localisation_image" in self.viewer.layers:
 
-            self.localisation_image_layer.data = image
-            self.localisation_image_layer.metadata = meta
-            self.localisation_threshold_layer.data = localisation_threshold_image
-            self.localisation_threshold_layer.metadata = meta
+                self.localisation_image_layer.data = image
+                self.localisation_image_layer.metadata = meta
+                self.localisation_threshold_layer.data = localisation_threshold_image
+                self.localisation_threshold_layer.metadata = meta
 
-        else:
+            else:
 
-            self.localisation_image_layer = self.viewer.add_image(image, name="localisation_image",metadata=meta)
-            self.localisation_threshold_layer = self.viewer.add_image(localisation_threshold_image, name="localisation_threshold", metadata=meta)
+                self.localisation_image_layer = self.viewer.add_image(image, name="localisation_image",metadata=meta)
+                self.localisation_threshold_layer = self.viewer.add_image(localisation_threshold_image, name="localisation_threshold", metadata=meta)
 
-            self.localisation_image_layer.mouse_drag_callbacks.append(self.localisation_click_events)
-            self.localisation_threshold_layer.mouse_drag_callbacks.append(self.localisation_click_events)
+                self.localisation_image_layer.mouse_drag_callbacks.append(self.localisation_click_events)
+                self.localisation_threshold_layer.mouse_drag_callbacks.append(self.localisation_click_events)
 
-        self.plot_frame_number.setMaximum(image.shape[0]-1)
+            self.plot_frame_number.setMaximum(image.shape[0]-1)
 
-        self.viewer.reset_view()
-        self.sort_layer_order()
+            self.viewer.reset_view()
+            self.sort_layer_order()
 
 
     def import_image_file(self):
