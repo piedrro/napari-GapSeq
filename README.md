@@ -25,7 +25,15 @@ https://napari.org/plugins/index.html
 
 You can install `napari-gapseq` via [pip]:
 
-    pip install napari-gapseq
+    conda create –-name napari-gapseq python==3.8
+    conda activate napari-gapseq
+
+    conda install -c anaconda git
+    conda update --all
+
+    pip install napari[all]
+
+    pip install git+https://github.com/piedrro/napari-gapseq.git
 
 
 

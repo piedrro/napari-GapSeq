@@ -249,8 +249,6 @@ class GapSeqTabWidget(QWidget):
                     image_trace_data.to_excel(writer, sheet_name='Image Data', index=True, startrow=1,startcol=1)
 
 
-
-
     def import_gapseq_data(self, mode = "all"):
 
         desktop = os.path.expanduser("~/Desktop")
