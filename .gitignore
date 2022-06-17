@@ -84,3 +84,5 @@ venv/
 **/_version.py
 /src/napari_gapseq/dev/
 /src/napari_gapseq/data.json
+/test.xlsx
+/src/napari_gapseq/gapseq.txt
