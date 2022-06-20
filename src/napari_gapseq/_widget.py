@@ -104,6 +104,7 @@ class GapSeqTabWidget(QWidget):
         self.plot_compute_progress = self.findChild(QProgressBar, "plot_compute_progress")
         self.plot_mode = self.findChild(QComboBox,"plot_mode")
         self.plot_localisation_number = self.findChild(QSlider,"plot_localisation_number")
+        self.plot_localisation_number_label = self.findChild(QLabel,"plot_localisation_number_label")
         self.plot_frame_number = self.findChild(QSlider,"plot_frame_number")
         self.plot_localisation_class = self.findChild(QComboBox,"plot_localisation_class")
         self.plot_localisation_classify = self.findChild(QPushButton,"plot_localisation_classify")
@@ -175,20 +176,63 @@ class GapSeqTabWidget(QWidget):
         self.gapseq_import_all.clicked.connect(partial(self.import_gapseq_data, mode='all'))
         self.gapseq_export_traces.clicked.connect(self.export_traces)
 
-        self.viewer.bind_key(key="Control-0", func=partial(self.keyboard_events, key=0), overwrite=True)
-        self.viewer.bind_key(key="Control-1", func=partial(self.keyboard_events, key=1), overwrite=True)
-        self.viewer.bind_key(key="Control-2", func=partial(self.keyboard_events, key=2), overwrite=True)
-        self.viewer.bind_key(key="Control-3", func=partial(self.keyboard_events, key=3), overwrite=True)
-        self.viewer.bind_key(key="Control-4", func=partial(self.keyboard_events, key=4), overwrite=True)
-        self.viewer.bind_key(key="Control-5", func=partial(self.keyboard_events, key=5), overwrite=True)
-        self.viewer.bind_key(key="Control-6", func=partial(self.keyboard_events, key=6), overwrite=True)
-        self.viewer.bind_key(key="Control-7", func=partial(self.keyboard_events, key=7), overwrite=True)
-        self.viewer.bind_key(key="Control-8", func=partial(self.keyboard_events, key=8), overwrite=True)
-        self.viewer.bind_key(key="Control-9", func=partial(self.keyboard_events, key=9), overwrite=True)
+        self.viewer.bind_key(key="Control-0", func=partial(self.keybind_classify_events, key=0), overwrite=True)
+        self.viewer.bind_key(key="Control-1", func=partial(self.keybind_classify_events, key=1), overwrite=True)
+        self.viewer.bind_key(key="Control-2", func=partial(self.keybind_classify_events, key=2), overwrite=True)
+        self.viewer.bind_key(key="Control-3", func=partial(self.keybind_classify_events, key=3), overwrite=True)
+        self.viewer.bind_key(key="Control-4", func=partial(self.keybind_classify_events, key=4), overwrite=True)
+        self.viewer.bind_key(key="Control-5", func=partial(self.keybind_classify_events, key=5), overwrite=True)
+        self.viewer.bind_key(key="Control-6", func=partial(self.keybind_classify_events, key=6), overwrite=True)
+        self.viewer.bind_key(key="Control-7", func=partial(self.keybind_classify_events, key=7), overwrite=True)
+        self.viewer.bind_key(key="Control-8", func=partial(self.keybind_classify_events, key=8), overwrite=True)
+        self.viewer.bind_key(key="Control-9", func=partial(self.keybind_classify_events, key=9), overwrite=True)
+
+        self.viewer.bind_key(key="d", func=partial(self.keybind_delete_event, key='d'), overwrite=True)
 
 
 
-    def keyboard_events(self,viewer,key):
+
+
+    def keybind_delete_event(self,viewer,key):
+
+        if "bounding_boxes" in self.viewer.layers:
+
+            if "bounding_box_data" in self.box_layer.metadata.keys():
+
+                localisation_number = self.plot_localisation_number.value()
+
+                localisation_number = int(self.plot_localisation_number_label.text())
+
+                bounding_boxes = self.box_layer.data.copy()
+                meta = self.box_layer.metadata.copy()
+
+                bounding_box_centres = meta["bounding_box_centres"]
+                bounding_box_class = meta["bounding_box_class"]
+                bounding_box_data = meta["bounding_box_data"]
+
+                if localisation_number is not None:
+
+                    del bounding_boxes[localisation_number]
+                    del bounding_box_centres[localisation_number]
+                    del bounding_box_class[localisation_number]
+
+                    for layer in bounding_box_data.keys():
+
+                        del bounding_box_data[layer][localisation_number]
+
+                    meta["bounding_box_centres"] = bounding_box_centres
+                    meta["bounding_box_class"] = bounding_box_class
+                    meta["bounding_box_data"] = bounding_box_data
+
+                    self.box_layer.data = bounding_boxes
+                    self.box_layer.metadata = meta
+
+                    self.plot_localisation_number.setMaximum(len(bounding_boxes) - 1)
+
+                    self.plot_graphs()
+
+
+    def keybind_classify_events(self, viewer, key):
 
         if "bounding_boxes" in self.viewer.layers:
 
@@ -534,6 +578,8 @@ class GapSeqTabWidget(QWidget):
         if "bounding_boxes" in self.viewer.layers:
 
             if "bounding_box_data" in self.box_layer.metadata.keys():
+
+                self.plot_localisation_number.setMaximum(len(self.box_layer.data) - 1)
 
                 image_layers = self.box_layer.metadata["image_layers"]
 
