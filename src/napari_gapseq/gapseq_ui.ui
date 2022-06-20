@@ -433,6 +433,11 @@
        <widget class="QComboBox" name="image_gap_code">
         <item>
          <property name="text">
+          <string>N/A</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
           <string>A</string>
          </property>
         </item>
@@ -462,6 +467,11 @@
       </item>
       <item row="2" column="1">
        <widget class="QComboBox" name="image_sequence_code">
+        <item>
+         <property name="text">
+          <string>N/A</string>
+         </property>
+        </item>
         <item>
          <property name="text">
           <string>A</string>
@@ -685,6 +695,42 @@
         </item>
        </widget>
       </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="label_26">
+        <property name="text">
+         <string>Nucleotide Filter</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="QComboBox" name="plot_nucleotide_filter">
+        <item>
+         <property name="text">
+          <string>None</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>A</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>T</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>C</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>G</string>
+         </property>
+        </item>
+       </widget>
+      </item>
      </layout>
     </item>
     <item>
@@ -861,6 +907,44 @@
       </item>
       <item row="0" column="2">
        <widget class="QPushButton" name="plot_localisation_classify">
+        <property name="text">
+         <string>Classify</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_25">
+        <property name="text">
+         <string>Classify Nucleotide</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="plot_nucleotide_class">
+        <item>
+         <property name="text">
+          <string>A</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>T</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>C</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>G</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="1" column="2">
+       <widget class="QPushButton" name="plot_nucleotide_classify">
         <property name="text">
          <string>Classify</string>
         </property>
