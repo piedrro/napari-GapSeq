@@ -190,9 +190,6 @@ class GapSeqTabWidget(QWidget):
         self.viewer.bind_key(key="d", func=partial(self.keybind_delete_event, key='d'), overwrite=True)
 
 
-
-
-
     def keybind_delete_event(self,viewer,key):
 
         if "bounding_boxes" in self.viewer.layers:
