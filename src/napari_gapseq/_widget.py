@@ -221,6 +221,7 @@ class GapSeqTabWidget(QWidget):
 
                 bounding_box_centres = meta["bounding_box_centres"]
                 bounding_box_class = meta["bounding_box_class"]
+                nucleotide_class = meta["nucleotide_class"]
                 bounding_box_data = meta["bounding_box_data"]
                 background_data = meta["background_data"]
 
@@ -229,6 +230,7 @@ class GapSeqTabWidget(QWidget):
                     del bounding_boxes[localisation_number]
                     del bounding_box_centres[localisation_number]
                     del bounding_box_class[localisation_number]
+                    del nucleotide_class[localisation_number]
 
                     for layer in bounding_box_data.keys():
 
@@ -239,6 +241,7 @@ class GapSeqTabWidget(QWidget):
                     meta["bounding_box_class"] = bounding_box_class
                     meta["bounding_box_data"] = bounding_box_data
                     meta["background_data"] = background_data
+                    meta["nucleotide_class"] = nucleotide_class
 
                     self.box_layer.data = bounding_boxes
                     self.box_layer.metadata = meta
@@ -762,6 +765,14 @@ class GapSeqTabWidget(QWidget):
 
         filter_class = self.plot_localisation_filter.currentText()
 
+        localisation_filter = self.plot_localisation_filter.currentText()
+        nucleotide_filter = self.plot_nucleotide_filter.currentText()
+
+        if self.plot_localisation_filter.currentText() != "None" or self.plot_nucleotide_filter.currentText() != "None":
+
+            filter_plots = True
+
+
         if "bounding_box_data" in self.box_layer.metadata.keys():
 
             meta = self.box_layer.metadata.copy()
@@ -823,6 +834,8 @@ class GapSeqTabWidget(QWidget):
                     localisation_number = self.plot_localisation_number.value()
 
                     bounding_box_class = self.box_layer.metadata["bounding_box_class"]
+                    nucleotide_class = self.box_layer.metadata["nucleotide_class"]
+
                     localisation_positions = np.where(np.array(bounding_box_class) == int(filter_class))[0].tolist()
 
                     if len(localisation_positions) > 0:
