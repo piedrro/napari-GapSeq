@@ -110,6 +110,7 @@ class GapSeqTabWidget(QWidget):
         self.plot_localisation_classify = self.findChild(QPushButton,"plot_localisation_classify")
         self.plot_localisation_filter = self.findChild(QComboBox,"plot_localisation_filter")
         self.plot_localisation_focus = self.findChild(QCheckBox,"plot_localisation_focus")
+        self.plot_background_subtraction_mode = self.findChild(QComboBox,"plot_background_subtraction_mode")
         self.graph_container = self.findChild(QWidget,"graph_container")
         self.gapseq_export_data = self.findChild(QPushButton,"gapseq_export_data")
         self.gapseq_export_at_import = self.findChild(QCheckBox,"gapseq_export_at_import")
@@ -168,6 +169,8 @@ class GapSeqTabWidget(QWidget):
         self.plot_localisation_classify.clicked.connect(self.classify_localisation)
         self.plot_localisation_filter.currentIndexChanged.connect(self.filter_localisations)
 
+        self.plot_background_subtraction_mode.currentIndexChanged.connect(self.plot_graphs)
+
         self.plot_compute.clicked.connect(self.compute_plot_data)
 
         self.gapseq_export_data.clicked.connect(self.export_data)
@@ -188,6 +191,7 @@ class GapSeqTabWidget(QWidget):
         self.viewer.bind_key(key="Control-9", func=partial(self.keybind_classify_events, key=9), overwrite=True)
 
         self.viewer.bind_key(key="d", func=partial(self.keybind_delete_event, key='d'), overwrite=True)
+
 
 
     def keybind_delete_event(self,viewer,key):
@@ -368,6 +372,7 @@ class GapSeqTabWidget(QWidget):
             meta["image_paths"] = gapseq_data["image_paths"]
             meta["image_metadata"] = gapseq_data["image_metadata"]
             meta["layer_image_shape"] = gapseq_data["layer_image_shape"]
+            meta["background_data"] = gapseq_data["background_data"]
 
             if "bounding_boxes" in self.viewer.layers:
 
@@ -400,6 +405,7 @@ class GapSeqTabWidget(QWidget):
                 bounding_box_class = meta["bounding_box_class"]
                 bounding_box_size = meta["bounding_box_size"]
                 layer_image_shape = meta["layer_image_shape"]
+                background_data = meta["background_data"]
 
                 if "image_paths" not in meta.keys():
 
@@ -441,10 +447,31 @@ class GapSeqTabWidget(QWidget):
                                        bounding_box_data = bounding_box_data,
                                        image_paths = image_paths,
                                        image_metadata = image_metadata,
-                                       layer_image_shape = layer_image_shape)
+                                       layer_image_shape = layer_image_shape,
+                                       background_data = background_data)
 
                     with open(path, 'w', encoding='utf-8') as f:
                         json.dump(gapseq_data, f, ensure_ascii=False, indent=4)
+
+
+
+    def get_background_mask(self, bounding_boxes,bounding_box_size, image):
+
+        bounding_boxes = self.box_layer.data.copy()
+
+        background_mask = np.zeros(image.shape, dtype=np.uint8)
+
+        for box in bounding_boxes:
+
+            [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = box
+
+            background_mask[:, int(y1):int(y2), int(x1):int(x2)] = 255
+
+        background_image = image.copy()
+
+        background_image[background_mask == 255] = 0
+
+        return background_image
 
 
     def compute_plot_data(self):
@@ -461,6 +488,7 @@ class GapSeqTabWidget(QWidget):
             bounding_box_size = meta["bounding_box_size"]
             layer_image_shape = {}
             bounding_box_data = {}
+            background_data = {}
 
             for i in range(len(image_layers)):
 
@@ -469,27 +497,40 @@ class GapSeqTabWidget(QWidget):
                 bounding_box_data[layer] = []
                 layer_image_shape[layer] = image.shape
 
+                background_image = self.get_background_mask(bounding_boxes, bounding_box_size, image)
+
+                background_data[layer]= {"global_background": np.mean(background_image,axis=(1, 2)).tolist(),
+                                         "local_background": []}
+
                 for j in range(len(bounding_boxes)):
 
                     progress = int(( ((i + 1) * (j +1)) / len(bounding_boxes) * len(image_layers)) * 100)
 
                     box = bounding_boxes[j]
-                    box_centre = bounding_box_centres[j]
+                    cx,cy = bounding_box_centres[j]
                     box_class = bounding_box_class[j]
                     box_size = bounding_box_size
+                    background_box_size = 10
 
                     [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = box
 
-                    vertialslice = image[:, int(y1):int(y2), int(x1):int(x2)]
-                    data = np.mean(vertialslice, axis=(1, 2)).tolist()
+                    data = image[:, int(y1):int(y2), int(x1):int(x2)]
+                    data = np.mean(data, axis=(1, 2)).tolist()
+
+                    [[y1,x1],[y2,x2]] = [[cy - background_box_size, cx - background_box_size],
+                                         [cy + background_box_size, cx + background_box_size]]
+                    local_background_data = background_image[:, int(y1):int(y2), int(x1):int(x2)].copy()
+                    local_background_data = np.mean(local_background_data, axis=(1, 2)).tolist()
 
                     bounding_box_data[layer].append(data)
+                    background_data[layer]["local_background"].append(local_background_data)
 
                     self.plot_compute_progress.setValue(progress)
 
             meta["bounding_box_data"] = bounding_box_data
             meta["layer_image_shape"] = layer_image_shape
             meta["image_layers"] = image_layers
+            meta["background_data"] = background_data
 
             self.box_layer.metadata = meta
             self.plot_compute_progress.setValue(0)
@@ -688,6 +729,14 @@ class GapSeqTabWidget(QWidget):
 
             bounding_box_data = meta["bounding_box_data"]
 
+            if "background_data" in meta.keys():
+                background_data = meta["background_data"]
+            else:
+                background_data = None
+
+            plot_background_subtraction_mode = self.plot_background_subtraction_mode.currentIndex()
+
+
             plot_data = []
 
             for layer in layers:
@@ -706,6 +755,17 @@ class GapSeqTabWidget(QWidget):
                         bounding_box_class = self.box_layer.metadata["bounding_box_class"][localisation_number]
 
                         data = bounding_box_layer_data[localisation_number]
+
+                        if plot_background_subtraction_mode == 1 and background_data != None:
+                            background = background_data[layer]["local_background"][localisation_number]
+                            data = list(np.array(data) - np.array(background))
+                            data = list(data - np.min(data))
+
+                        if plot_background_subtraction_mode == 2 and background_data != None:
+                            background = background_data[layer]["global_background"]
+                            data = np.array(data) - np.array(background)
+                            data = list(data - np.min(data))
+
 
                         [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = bounding_box
 
