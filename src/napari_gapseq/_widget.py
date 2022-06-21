@@ -20,6 +20,9 @@ import numpy as np
 import time
 import cv2
 import pandas as pd
+from skimage.filters import difference_of_gaussians
+from skimage.morphology import erosion, disk
+
 from glob2 import glob
 import tifffile
 import cv2 as cv
@@ -89,6 +92,7 @@ class GapSeqTabWidget(QWidget):
         #register QWidgets/Controls
         self.localisation_channel = self.findChild(QComboBox,"localisation_channel")
         self.localisation_import_image = self.findChild(QPushButton,"localisation_import_image")
+        self.localisation_type = self.findChild(QComboBox,"localisation_type")
         self.localisation_threshold = self.findChild(QSlider,"localisation_threshold")
         self.localisation_area_min = self.findChild(QSlider,"localisation_area_min")
         self.localisation_area_max = self.findChild(QSlider,"localisation_area_max")
@@ -405,16 +409,30 @@ class GapSeqTabWidget(QWidget):
             meta["layer_image_shape"] = gapseq_data["layer_image_shape"]
             meta["background_data"] = gapseq_data["background_data"]
             meta["nucleotide_class"] = gapseq_data["nucleotide_class"]
+            meta["localisation_type"] = gapseq_data["localisation_type"]
 
             if "bounding_boxes" in self.viewer.layers:
+
+                if meta["localisation_type"] == "Box":
+                    self.box_layer.shape_type = ["Rectangle"] * len(bounding_boxes)
+
+                if meta["localisation_type"] == "Circle":
+                    self.box_layer.shape_type = ["Ellipse"] * len(bounding_boxes)
 
                 self.viewer.layers["bounding_boxes"].data = bounding_boxes
                 self.viewer.layers["bounding_boxes"].metadata = meta
 
             else:
 
-                self.box_layer = self.viewer.add_shapes(bounding_boxes, name="bounding_boxes", shape_type='Rectangle', edge_width=1, edge_color='red', face_color=[0, 0, 0, 0], opacity=0.3, metadata=gapseq_data)
-                self.box_layer.mouse_drag_callbacks.append(self.localisation_click_events)
+                if meta["localisation_type"] == "Box":
+
+                    self.box_layer = self.viewer.add_shapes(bounding_boxes, name="bounding_boxes", shape_type='Rectangle', edge_width=1, edge_color='red', face_color=[0, 0, 0, 0], opacity=0.3, metadata=gapseq_data)
+                    self.box_layer.mouse_drag_callbacks.append(self.localisation_click_events)
+
+                if meta["localisation_type"] == "Circle":
+
+                    self.box_layer = self.viewer.add_shapes(bounding_boxes, name="bounding_boxes", shape_type='Ellipse',edge_width=1, edge_color='red', face_color=[0, 0, 0, 0],opacity=0.3,metadata=meta)
+                    self.box_layer.mouse_drag_callbacks.append(self.localisation_click_events)
 
             self.sort_layer_order()
             self.plot_graphs()
@@ -439,6 +457,8 @@ class GapSeqTabWidget(QWidget):
                 layer_image_shape = meta["layer_image_shape"]
                 background_data = meta["background_data"]
                 nucleotide_class = meta["nucleotide_class"]
+                localisation_type = meta["localisation_type"]
+
 
                 if "image_paths" not in meta.keys():
 
@@ -482,30 +502,39 @@ class GapSeqTabWidget(QWidget):
                                        image_metadata = image_metadata,
                                        layer_image_shape = layer_image_shape,
                                        background_data = background_data,
-                                       nucleotide_class = nucleotide_class)
+                                       nucleotide_class = nucleotide_class,
+                                       localisation_type = localisation_type)
 
                     with open(path, 'w', encoding='utf-8') as f:
                         json.dump(gapseq_data, f, ensure_ascii=False, indent=4)
 
 
 
-    def get_background_mask(self, bounding_boxes,bounding_box_size, image):
+    def get_background_mask(self, bounding_boxes,bounding_box_size, bounding_box_centres, image):
 
         bounding_boxes = self.box_layer.data.copy()
+        shape_type = np.unique(self.box_layer.shape_type)[0]
 
-        background_mask = np.zeros(image.shape, dtype=np.uint8)
+        background_mask = np.zeros((image.shape[-2], image.shape[-1]), dtype=np.uint8)
 
-        for box in bounding_boxes:
+        for i in range(len(bounding_boxes)):
+            polygon = bounding_boxes[i]
+            [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = polygon
+            cx, cy = bounding_box_centres[i]
+            box_size = bounding_box_size
 
-            [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = box
-
-            background_mask[:, int(y1):int(y2), int(x1):int(x2)] = 255
+            if shape_type == "rectangle":
+                background_mask[int(y1):int(y2), int(x1):int(x2)] = 255
+            if shape_type == "ellipse":
+                cv.circle(background_mask, (cx, cy), box_size, 255, -1)
 
         background_image = image.copy()
+        masked_image = image.copy()
 
-        background_image[background_mask == 255] = 0
+        background_image[:,background_mask == 255] = 0
+        masked_image[:, background_mask != 255] = 0
 
-        return background_image
+        return background_image, masked_image
 
 
     def compute_plot_data(self):
@@ -515,6 +544,8 @@ class GapSeqTabWidget(QWidget):
             image_layers = [layer.name for layer in self.viewer.layers if layer.name not in ["bounding_boxes", "localisation_threshold"]]
 
             bounding_boxes = self.box_layer.data.copy()
+
+            shape_type = np.unique(self.box_layer.shape_type)[0]
             meta = self.box_layer.metadata.copy()
 
             bounding_box_centres = meta["bounding_box_centres"]
@@ -531,7 +562,7 @@ class GapSeqTabWidget(QWidget):
                 bounding_box_data[layer] = []
                 layer_image_shape[layer] = image.shape
 
-                background_image = self.get_background_mask(bounding_boxes, bounding_box_size, image)
+                background_image, masked_image = self.get_background_mask(bounding_boxes, bounding_box_size, bounding_box_centres, image)
 
                 background_data[layer]= {"global_background": np.mean(background_image,axis=(1, 2)).tolist(),
                                          "local_background": []}
@@ -540,16 +571,15 @@ class GapSeqTabWidget(QWidget):
 
                     progress = int(( ((i + 1) * (j +1)) / len(bounding_boxes) * len(image_layers)) * 100)
 
-                    box = bounding_boxes[j]
+                    polygon = bounding_boxes[j]
+                    [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = polygon
                     cx,cy = bounding_box_centres[j]
                     box_class = bounding_box_class[j]
                     box_size = bounding_box_size
                     background_box_size = 10
 
-                    [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = box
-
-                    data = image[:, int(y1):int(y2), int(x1):int(x2)]
-                    data = np.mean(data, axis=(1, 2)).tolist()
+                    data = masked_image[:, int(y1):int(y2), int(x1):int(x2)]
+                    data = np.nanmean(data, axis=(1, 2)).tolist()
 
                     [[y1,x1],[y2,x2]] = [[cy - background_box_size, cx - background_box_size],
                                          [cy + background_box_size, cx + background_box_size]]
@@ -772,7 +802,6 @@ class GapSeqTabWidget(QWidget):
 
             filter_plots = True
 
-
         if "bounding_box_data" in self.box_layer.metadata.keys():
 
             meta = self.box_layer.metadata.copy()
@@ -807,15 +836,16 @@ class GapSeqTabWidget(QWidget):
                         data = bounding_box_layer_data[localisation_number]
 
                         if plot_background_subtraction_mode == 1 and background_data != None:
+
                             background = background_data[layer]["local_background"][localisation_number]
                             data = list(np.array(data) - np.array(background))
                             data = list(data - np.min(data))
 
                         if plot_background_subtraction_mode == 2 and background_data != None:
+
                             background = background_data[layer]["global_background"]
                             data = np.array(data) - np.array(background)
                             data = list(data - np.min(data))
-
 
                         [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = bounding_box
 
@@ -941,6 +971,7 @@ class GapSeqTabWidget(QWidget):
             data_coordinates = selected_layer.world_to_data(event.position)
             coord = np.round(data_coordinates).astype(int)
             self.current_coord = coord
+            shape_type = np.unique(self.box_layer.shape_type)[0]
 
             if coord is not None:
 
@@ -968,10 +999,16 @@ class GapSeqTabWidget(QWidget):
 
                     size = self.localisation_bbox_size.value()
 
-                    box = [[int(coord[0] - size), int(coord[1] - size)], [int(coord[0] + size), int(coord[1] + size)]]
-                    box_centre = [int(coord[0]), int(coord[1])]
+                    cx,cy = int(coord[1]), int(coord[0])
 
-                    bounding_boxes.append(box)
+                    polygon = [[cy - size, cx - size],
+                               [cy + size, cx - size],
+                               [cy + size, cx + size],
+                               [cy - size, cx + size]]
+
+                    box_centre = [cx, cy]
+
+                    bounding_boxes.append(polygon)
                     bounding_box_centres.append(box_centre)
 
                     meta["bounding_box_size"] = size
@@ -996,9 +1033,12 @@ class GapSeqTabWidget(QWidget):
 
                 cx,cy = bounding_box_centres[i]
 
-                box = [[cy - size, cx - size], [cy + size, cx + size]]
+                polygon = [[cy - size, cx - size],
+                           [cy + size, cx - size],
+                           [cy + size, cx + size],
+                           [cy - size, cx + size]]
 
-                bounding_boxes[i] = box
+                bounding_boxes[i] = polygon
 
             if len(bounding_boxes) > 0 :
 
@@ -1045,7 +1085,8 @@ class GapSeqTabWidget(QWidget):
 
             contours = find_contours(localisation_mask)
 
-            polygons = []
+            bounding_boxes = []
+            bounding_circles = []
             bounding_box_centres = []
             bounding_box_class = []
             nucleotide_class = []
@@ -1068,9 +1109,12 @@ class GapSeqTabWidget(QWidget):
 
                         size = bounding_box_size
 
-                        polygon = [[cy - size, cx - size], [cy + size, cx + size]]
+                        polygon = [[cy - size, cx - size],
+                                   [cy + size, cx - size],
+                                   [cy + size, cx + size],
+                                   [cy - size, cx + size]]
 
-                        polygons.append(polygon)
+                        bounding_boxes.append(polygon)
                         bounding_box_centres.append([cx,cy])
                         bounding_box_class.append(0)
                         nucleotide_class.append("N/A")
@@ -1078,23 +1122,39 @@ class GapSeqTabWidget(QWidget):
                 except:
                     pass
 
-            if len(polygons) > 0:
+            if len(bounding_boxes) > 0:
 
                 meta["bounding_box_centres"] = bounding_box_centres
                 meta["bounding_box_class"] = bounding_box_class
                 meta["bounding_box_size"] = bounding_box_size
                 meta["nucleotide_class"] = nucleotide_class
+                meta["localisation_type"] = self.localisation_type.currentText()
 
-                self.plot_localisation_number.setMaximum(len(polygons)-1)
+                self.plot_localisation_number.setMaximum(len(bounding_boxes)-1)
 
                 if "bounding_boxes" in self.viewer.layers:
 
-                    self.box_layer.data = polygons
+                    if self.localisation_type.currentText() == "Box":
+                        self.box_layer.shape_type = ["Rectangle"]*len(bounding_boxes)
+
+                    if self.localisation_type.currentText() == "Circle":
+                        self.box_layer.shape_type = ["Ellipse"]*len(bounding_boxes)
+
+                    self.box_layer.data = bounding_boxes
                     self.box_layer.metadata = meta
 
                 else:
-                    self.box_layer = self.viewer.add_shapes(polygons, name = "bounding_boxes", shape_type='Rectangle', edge_width=1, edge_color='red', face_color=[0, 0, 0, 0], opacity=0.3, metadata=meta)
-                    self.box_layer.mouse_drag_callbacks.append(self.localisation_click_events)
+
+                    if self.localisation_type.currentText() == "Box":
+
+                        self.box_layer = self.viewer.add_shapes(bounding_boxes, name = "bounding_boxes", shape_type='Rectangle', edge_width=1, edge_color='red', face_color=[0, 0, 0, 0], opacity=0.3, metadata=meta)
+
+                    if self.localisation_type.currentText() == "Circle":
+
+                        self.box_layer = self.viewer.add_shapes(bounding_boxes, name="bounding_boxes", shape_type='Ellipse',edge_width=1, edge_color='red', face_color=[0, 0, 0, 0],opacity=0.3, metadata=meta)
+
+                self.box_layer.mouse_drag_callbacks.append(self.localisation_click_events)
+
 
     def import_localisation_image(self, meta = [], import_gapseq = False):
 
@@ -1128,7 +1188,12 @@ class GapSeqTabWidget(QWidget):
                 image = np.moveaxis(image, -1, 0)
                 image = np.mean(image, axis=0).astype(np.uint8)
 
+                image = difference_of_gaussians(image, 1)
+
                 _, localisation_mask = cv.threshold(image, localisation_threshold, 255, cv.THRESH_BINARY)
+
+                footprint = disk(1)
+                image = erosion(image, footprint)
 
                 localisation_threshold_image = np.hstack((image,localisation_mask))
 
@@ -1141,14 +1206,21 @@ class GapSeqTabWidget(QWidget):
                 meta["crop_mode"] = crop_mode
 
                 img = np.max(image, axis=0)
+
+                img = difference_of_gaussians(img, 1)
+
                 img = normalize99(img)
                 img = rescale01(img) * 255
                 img = img.astype(np.uint8)
 
-                localisation_mask_image = cv.fastNlMeansDenoising(img, h=30, templateWindowSize=5, searchWindowSize=31)
-                _, localisation_mask = cv.threshold(localisation_mask_image, localisation_threshold, 255, cv.THRESH_BINARY)
+                # localisation_mask_image = cv.fastNlMeansDenoising(img, h=30, templateWindowSize=5, searchWindowSize=31)
 
-                localisation_threshold_image = np.hstack((localisation_mask_image,localisation_mask))
+                footprint = disk(1)
+                localisation_mask_image = erosion(img, footprint)
+
+                _, localisation_mask = cv.threshold(img, localisation_threshold, 255, cv.THRESH_BINARY)
+
+                localisation_threshold_image = np.hstack((img,localisation_mask))
 
                 meta["localisation_threshold"] = localisation_threshold
                 meta["path"] = path
@@ -1298,59 +1370,3 @@ class GapSeqTabWidget(QWidget):
 
             slider_value = self.slider.value()
             self.label.setText(str(slider_value))
-
-
-
-    def on_press(self, event):
-
-        if event.xdata != None:
-
-            frame_int = int(event.xdata)
-
-            current_dims = self.viewer.dims.current_step
-
-            new_dims = tuple([frame_int, *list(current_dims)[1:]])
-
-            self.viewer.dims.current_step = new_dims
-
-
-    def select_localisation(self, viewer=None, event = None,  mode = "click"):
-
-        if mode == "click":
-            selected_layer = self.viewer.layers.selection.active
-            data_coordinates = selected_layer.world_to_data(event.position)
-            coord = np.round(data_coordinates).astype(int)
-            self.current_coord = coord
-        if mode == "layer_change":
-            coord = self.current_coord
-
-        if coord is not None:
-
-            if len(coord) > 2:
-
-                coord = coord[1:]
-
-            polygons = self.box_layer.data
-
-            box_colour = self.box_layer.get_value(coord)[0]
-
-            if box_colour is not None:
-
-                [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = polygons[box_colour]
-
-                current_frame = int(self.viewer.dims.current_step[0])
-
-                localisation_data = []
-
-                for layer in self.viewer.layers.selection:
-
-                    layer_name = str(layer)
-
-                    if layer_name != "polygons":
-
-                        spot = layer.data[:, int(y1):int(y2), int(x1):int(x2)]
-                        data = np.mean(spot, axis=(1, 2))
-
-                        localisation_data.append({'layer_name':layer_name, 'data':data, 'spot':spot[current_frame]})
-
-                self.plot(self.canvas, plot_data = localisation_data)
