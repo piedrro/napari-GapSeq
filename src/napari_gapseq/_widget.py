@@ -33,6 +33,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQT
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 import time
 import json
+from scipy import optimize
 
 plt.style.use('dark_background')
 
@@ -100,9 +101,9 @@ class GapSeqTabWidget(QWidget):
         self.localisation_threshold_label = self.findChild(QLabel,"localisation_threshold_label")
         self.localisation_area_min_label = self.findChild(QLabel,"localisation_area_min_label")
         self.localisation_area_max_label = self.findChild(QLabel,"localisation_area_max_label")
+        self.localisation_aspect_ratio = self.findChild(QSlider,"localisation_aspect_ratio")
         self.localisation_bbox_size_label = self.findChild(QLabel,"localisation_bbox_size_label")
         self.localisation_detect = self.findChild(QPushButton,"localisation_detect")
-        self.localisation_live_detection = self.findChild(QCheckBox,"localisation_live_detection")
         self.load_dev = self.findChild(QPushButton,"load_dev")
         self.plot_compute = self.findChild(QPushButton,"plot_compute")
         self.plot_compute_progress = self.findChild(QProgressBar, "plot_compute_progress")
@@ -150,8 +151,12 @@ class GapSeqTabWidget(QWidget):
         self.localisation_threshold.valueChanged.connect(lambda: self.update_slider_label("localisation_threshold"))
         self.localisation_area_min.valueChanged.connect(lambda: self.update_slider_label("localisation_area_min"))
         self.localisation_area_max.valueChanged.connect(lambda: self.update_slider_label("localisation_area_max"))
+        self.localisation_aspect_ratio.valueChanged.connect(lambda: self.update_slider_label("localisation_aspect_ratio"))
+        self.localisation_bbox_size.valueChanged.connect(lambda: self.update_slider_label("localisation_bbox_size"))
         self.plot_localisation_number.valueChanged.connect(lambda: self.update_slider_label("plot_localisation_number"))
         self.plot_frame_number.valueChanged.connect(lambda: self.update_slider_label("plot_frame_number"))
+
+        self.update_slider_label("localisation_aspect_ratio")
 
         self.localisation_bbox_size.valueChanged.connect(self.modify_bounding_boxes)
 
@@ -159,11 +164,6 @@ class GapSeqTabWidget(QWidget):
         self.localisation_detect.clicked.connect(self.detect_localisations)
 
         self.localisation_threshold.valueChanged.connect(self.threshold_image)
-
-        self.localisation_area_min.valueChanged.connect(self.detect_localisations)
-        self.localisation_area_max.valueChanged.connect(self.detect_localisations)
-
-        self.localisation_live_detection.stateChanged.connect(self.update_live_localisation_event)
 
         self.import_image.clicked.connect(self.import_image_file)
 
@@ -949,20 +949,6 @@ class GapSeqTabWidget(QWidget):
             self.canvas.draw()
 
 
-    def update_live_localisation_event(self):
-
-        if self.localisation_live_detection.isChecked():
-
-            self.localisation_area_min.valueChanged.connect(self.detect_localisations)
-            self.localisation_area_max.valueChanged.connect(self.detect_localisations)
-
-        else:
-
-            self.localisation_area_min.valueChanged.disconnect(self.detect_localisations)
-            self.localisation_area_max.valueChanged.disconnect(self.detect_localisations)
-
-
-
     def localisation_click_events(self, viewer, event):
 
         if "Control" in event.modifiers and "bounding_boxes" in self.viewer.layers:
@@ -1079,9 +1065,11 @@ class GapSeqTabWidget(QWidget):
             bounding_box_size = self.localisation_bbox_size.value()
 
             threshold_image = self.localisation_threshold_layer.data
+
             meta = self.localisation_threshold_layer.metadata
 
             localisation_mask = threshold_image[:,threshold_image.shape[1]//2 :]
+            localisation_image = threshold_image[:,: threshold_image.shape[1]//2]
 
             contours = find_contours(localisation_mask)
 
@@ -1153,7 +1141,122 @@ class GapSeqTabWidget(QWidget):
 
                         self.box_layer = self.viewer.add_shapes(bounding_boxes, name="bounding_boxes", shape_type='Ellipse',edge_width=1, edge_color='red', face_color=[0, 0, 0, 0],opacity=0.3, metadata=meta)
 
+
+                self.fit_localisations()
                 self.box_layer.mouse_drag_callbacks.append(self.localisation_click_events)
+
+
+    def fit_localisations(self):
+
+        threshold_image = self.localisation_threshold_layer.data
+        localisation_image = threshold_image[:, : threshold_image.shape[1] // 2]
+        localisation_image = np.expand_dims(localisation_image,0)
+
+        aspect_ratio_max = int(self.localisation_aspect_ratio.value())/10
+
+        print(aspect_ratio_max)
+
+        bounding_boxes = self.box_layer.data
+        meta = self.box_layer.metadata.copy()
+
+        bounding_box_size = meta["bounding_box_size"]
+        bounding_box_centres = meta["bounding_box_centres"]
+
+        background_image, masked_image = self.get_background_mask(bounding_boxes, bounding_box_size, bounding_box_centres, localisation_image)
+
+        fitted_bounding_boxes = []
+        fitted_bounding_box_centres = []
+        fitted_bounding_box_class = []
+        fitted_nucleotide_class = []
+
+        for i in range(len(bounding_boxes)):
+
+            polygon = bounding_boxes[i]
+
+            cx, cy = bounding_box_centres[i]
+            size = bounding_box_size
+
+            box = [[cy - size, cx - size], [cy + size, cx + size]]
+            [[y1, x1], [y2, x2]] = box
+
+            img = masked_image[0][y1:y2, x1:x2]
+
+            try:
+                params = self.fitgaussian(img)
+
+                cy = int(cy + 0.5 - size + params[1])
+                cx = int(cx + 0.5 - size + params[2])
+
+                aspect_ratio = np.max([params[3], params[4]]) / np.min([params[3], params[4]])
+
+                if aspect_ratio < aspect_ratio_max:
+
+                    polygon = [[cy - size, cx - size],
+                               [cy + size, cx - size],
+                               [cy + size, cx + size],
+                               [cy - size, cx + size]]
+
+                    fitted_bounding_boxes.append(polygon)
+                    fitted_bounding_box_centres.append([cx, cy])
+                    fitted_bounding_box_class.append(0)
+                    fitted_nucleotide_class.append("N/A")
+
+
+            except:
+                pass
+
+
+        meta["bounding_box_centres"] = fitted_bounding_box_centres
+        meta["bounding_box_class"] = fitted_bounding_box_class
+        meta["nucleotide_class"] = fitted_nucleotide_class
+
+        self.box_layer.data = fitted_bounding_boxes
+        self.box_layer.metadata = meta
+
+
+
+    def gaussian(self, height, center_x, center_y, width_x, width_y):
+
+        """Returns a gaussian function with the given parameters"""
+
+        width_x = float(width_x)
+        width_y = float(width_y)
+
+        return lambda x, y: height * np.exp(
+            -(((center_x - x) / width_x) ** 2 + ((center_y - y) / width_y) ** 2) / 2)
+
+    def moments(self, data):
+
+        """Returns (height, x, y, width_x, width_y)
+        the gaussian parameters of a 2D distribution by calculating its
+        moments """
+
+        total = data.sum()
+        X, Y = np.indices(data.shape)
+        x = (X * data).sum() / total
+        y = (Y * data).sum() / total
+
+        col = data[:, int(y)]
+        width_x = np.sqrt(np.abs((np.arange(col.size) - x) ** 2 * col).sum() / col.sum())
+
+        row = data[int(x), :]
+        width_y = np.sqrt(np.abs((np.arange(row.size) - y) ** 2 * row).sum() / row.sum())
+
+        height = data.max()
+
+        return height, x, y, width_x, width_y
+
+    def fitgaussian(self, data):
+
+        """Returns (height, x, y, width_x, width_y)
+        the gaussian parameters of a 2D distribution found by a fit"""
+
+        params = self.moments(data)
+        errorfunction = lambda p: np.ravel(self.gaussian(*p)(*np.indices(data.shape)) - data)
+        p, success = optimize.leastsq(errorfunction, params)
+
+        return p
+
 
 
     def import_localisation_image(self, meta = [], import_gapseq = False):
@@ -1369,4 +1472,9 @@ class GapSeqTabWidget(QWidget):
         else:
 
             slider_value = self.slider.value()
+
+            if slider_name == "localisation_aspect_ratio":
+
+                slider_value = self.slider.value()/10
+
             self.label.setText(str(slider_value))
