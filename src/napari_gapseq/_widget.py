@@ -35,6 +35,7 @@ import time
 import json
 from scipy import optimize
 import warnings
+from scipy.spatial import distance
 
 plt.style.use('dark_background')
 
@@ -103,6 +104,7 @@ class GapSeqTabWidget(QWidget):
         self.localisation_area_min_label = self.findChild(QLabel,"localisation_area_min_label")
         self.localisation_area_max_label = self.findChild(QLabel,"localisation_area_max_label")
         self.localisation_aspect_ratio = self.findChild(QSlider,"localisation_aspect_ratio")
+        self.localisation_minimum_distance = self.findChild(QSlider,"localisation_minimum_distance")
         self.localisation_bbox_size_label = self.findChild(QLabel,"localisation_bbox_size_label")
         self.localisation_detect = self.findChild(QPushButton,"localisation_detect")
         self.load_dev = self.findChild(QPushButton,"load_dev")
@@ -154,6 +156,7 @@ class GapSeqTabWidget(QWidget):
         self.localisation_area_max.valueChanged.connect(lambda: self.update_slider_label("localisation_area_max"))
         self.localisation_aspect_ratio.valueChanged.connect(lambda: self.update_slider_label("localisation_aspect_ratio"))
         self.localisation_bbox_size.valueChanged.connect(lambda: self.update_slider_label("localisation_bbox_size"))
+        self.localisation_minimum_distance.valueChanged.connect(lambda: self.update_slider_label("localisation_minimum_distance"))
         self.plot_localisation_number.valueChanged.connect(lambda: self.update_slider_label("plot_localisation_number"))
         self.plot_frame_number.valueChanged.connect(lambda: self.update_slider_label("plot_frame_number"))
 
@@ -1057,6 +1060,13 @@ class GapSeqTabWidget(QWidget):
             self.localisation_threshold_layer.metadata = meta
 
 
+    def filter_array(self, array, condition):
+
+        array = [elem for i, elem in enumerate(array) if condition[i] == True]
+
+        return array
+
+
     def detect_localisations(self):
 
         if "localisation_threshold" in self.viewer.layers:
@@ -1110,6 +1120,20 @@ class GapSeqTabWidget(QWidget):
 
                 except:
                     pass
+
+
+
+            distances = distance.cdist(bounding_box_centres, bounding_box_centres)
+
+            distances[distances == 0] = np.nan
+            distances = np.nanmin(distances,axis=1)
+
+            distance_filter = distances > self.localisation_minimum_distance.value()
+
+            bounding_boxes = self.filter_array(bounding_boxes, distance_filter)
+            bounding_box_class = self.filter_array(bounding_box_class, distance_filter)
+            nucleotide_class = self.filter_array(nucleotide_class, distance_filter)
+            bounding_box_centres = self.filter_array(bounding_box_centres, distance_filter)
 
             if len(bounding_boxes) > 0:
 
