@@ -34,6 +34,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 import time
 import json
 from scipy import optimize
+import warnings
 
 plt.style.use('dark_background')
 
@@ -1154,8 +1155,6 @@ class GapSeqTabWidget(QWidget):
 
         aspect_ratio_max = int(self.localisation_aspect_ratio.value())/10
 
-        print(aspect_ratio_max)
-
         bounding_boxes = self.box_layer.data
         meta = self.box_layer.metadata.copy()
 
@@ -1182,7 +1181,10 @@ class GapSeqTabWidget(QWidget):
             img = masked_image[0][y1:y2, x1:x2]
 
             try:
-                params = self.fitgaussian(img)
+
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", category=RuntimeWarning)
+                    params = self.fitgaussian(img)
 
                 cy = int(cy + 0.5 - size + params[1])
                 cx = int(cx + 0.5 - size + params[2])
@@ -1204,7 +1206,6 @@ class GapSeqTabWidget(QWidget):
 
             except:
                 pass
-
 
         meta["bounding_box_centres"] = fitted_bounding_box_centres
         meta["bounding_box_class"] = fitted_bounding_box_class
