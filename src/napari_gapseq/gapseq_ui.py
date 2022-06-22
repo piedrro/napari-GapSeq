@@ -503,7 +503,7 @@ class Ui_TabWidget(object):
         self.localisation_area_max_label.setText(_translate("TabWidget", "7"))
         self.label_8.setText(_translate("TabWidget", "Min Localisation Area"))
         self.label_28.setText(_translate("TabWidget", "Max Localisation Aspect Ratio"))
-        self.label_29.setText(_translate("TabWidget", "Minimum Distance"))
+        self.label_29.setText(_translate("TabWidget", "Minimum (Centre-Centre) Distance"))
         self.localisation_minimum_distance_label.setText(_translate("TabWidget", "10"))
         self.localisation_detect.setText(_translate("TabWidget", "Detect Localisations"))
         self.label_12.setText(_translate("TabWidget", "Modify Bounding Boxes"))

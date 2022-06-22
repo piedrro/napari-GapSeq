@@ -332,7 +332,7 @@
       <item row="4" column="0">
        <widget class="QLabel" name="label_29">
         <property name="text">
-         <string>Minimum Distance</string>
+         <string>Minimum (Centre-Centre) Distance</string>
         </property>
        </widget>
       </item>
