@@ -123,6 +123,7 @@ class GapSeqTabWidget(QWidget):
         self.plot_nucleotide_filter = self.findChild(QComboBox, "plot_nucleotide_filter")
 
         self.plot_localisation_focus = self.findChild(QCheckBox,"plot_localisation_focus")
+        self.plot_show_active = self.findChild(QCheckBox,"plot_show_active")
         self.plot_background_subtraction_mode = self.findChild(QComboBox,"plot_background_subtraction_mode")
         self.graph_container = self.findChild(QWidget,"graph_container")
         self.gapseq_export_data = self.findChild(QPushButton,"gapseq_export_data")
@@ -258,7 +259,6 @@ class GapSeqTabWidget(QWidget):
                     self.plot_localisation_number.setMaximum(len(bounding_boxes) - 1)
 
                     self.plot_graphs()
-
 
     def keybind_classify_nucleotide(self, viewer, key):
 
@@ -694,8 +694,6 @@ class GapSeqTabWidget(QWidget):
 
                 if plot_mode_index == 0:
 
-                    # self.plot_localisation_number.setMaximum(len(self.box_layer.data) - 1)
-
                     layers = ["localisation_image"]
 
                     maximum_height = 300 * len(layers)
@@ -760,6 +758,21 @@ class GapSeqTabWidget(QWidget):
                         plot_data = self.get_plot_data(layers=layers)
                         self.plot(plot_data=plot_data)
 
+
+                if self.plot_show_active.isChecked():
+
+                    edge_colours = [[1.0,0.0,0.0,0.0] for i in self.box_layer.data]
+
+                    localisation_number = int(self.plot_localisation_number_label.text())
+
+                    edge_colours[localisation_number] = [1.0,0.0,0.0,1.0]
+
+                    self.box_layer.edge_color = edge_colours
+
+                else:
+                    edge_colours = [[1.0,0.0,0.0,1.0] for i in self.box_layer.data]
+                    self.box_layer.edge_color = edge_colours
+
                 if self.plot_localisation_focus.isChecked() and plot_data is not None:
 
                     x1,x2,y1,y2 = plot_data[0]["box"]
@@ -820,6 +833,8 @@ class GapSeqTabWidget(QWidget):
                 image_shape = meta["layer_image_shape"][layer]
 
                 if localisation_filter == "None" and nucleotide_filter == "None":
+
+                    self.plot_localisation_number.setMaximum(len(self.box_layer.data) - 1)
 
                     frame_number = self.plot_frame_number.value()
                     localisation_number = self.plot_localisation_number.value()

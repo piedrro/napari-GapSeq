@@ -907,6 +907,13 @@
      </widget>
     </item>
     <item>
+     <widget class="QCheckBox" name="plot_show_active">
+      <property name="text">
+       <string>Show Active Localisation Ony (Hide Others)</string>
+      </property>
+     </widget>
+    </item>
+    <item>
      <widget class="QWidget" name="graph_container" native="true">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
