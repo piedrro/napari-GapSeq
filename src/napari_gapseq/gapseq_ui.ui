@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>371</width>
-    <height>727</height>
+    <width>368</width>
+    <height>750</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -1146,16 +1146,26 @@
      </widget>
     </item>
     <item>
+     <widget class="QCheckBox" name="export_traces_at_import">
+      <property name="text">
+       <string>Export Trace Data in Import Directory</string>
+      </property>
+      <property name="checked">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </item>
+    <item>
      <layout class="QFormLayout" name="formLayout_3">
-      <item row="0" column="0">
+      <item row="2" column="0">
        <widget class="QLabel" name="label_21">
         <property name="text">
-         <string>Localisation Filter</string>
+         <string>Localisation Class Filter</string>
         </property>
        </widget>
       </item>
-      <item row="0" column="1">
-       <widget class="QComboBox" name="gapseq_export_traces_filter">
+      <item row="2" column="1">
+       <widget class="QComboBox" name="traces_class_filter">
         <item>
          <property name="text">
           <string>None</string>
@@ -1213,12 +1223,102 @@
         </item>
        </widget>
       </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="traces_data_selection">
+        <item>
+         <property name="text">
+          <string>Localisation Image</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Image(s) Only</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="label_30">
+        <property name="text">
+         <string>Data Selection</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="QComboBox" name="traces_nucleotide_filter">
+        <item>
+         <property name="text">
+          <string>None</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>A</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>C</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>T</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>G</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="label_31">
+        <property name="text">
+         <string>Localisation Nucleotide Filter</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_32">
+        <property name="text">
+         <string>Background Subtraction Mode</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="traces_background_mode">
+        <item>
+         <property name="text">
+          <string>None</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Local Background Subtraction</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Global Background Subtraction</string>
+         </property>
+        </item>
+       </widget>
+      </item>
      </layout>
     </item>
     <item>
-     <widget class="QPushButton" name="gapseq_export_traces">
+     <widget class="QPushButton" name="gapseq_export_traces_excel">
       <property name="text">
-       <string>Export Traces</string>
+       <string>Export Traces Excel</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QPushButton" name="gapseq_export_traces_dat">
+      <property name="text">
+       <string>Export Traces DAT</string>
       </property>
      </widget>
     </item>

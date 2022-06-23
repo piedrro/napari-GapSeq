@@ -130,8 +130,13 @@ class GapSeqTabWidget(QWidget):
         self.gapseq_export_at_import = self.findChild(QCheckBox,"gapseq_export_at_import")
         self.gapseq_import_localisations = self.findChild(QPushButton,"gapseq_import_localisations")
         self.gapseq_import_all = self.findChild(QPushButton, "gapseq_import_all")
-        self.gapseq_export_traces = self.findChild(QPushButton, "gapseq_export_traces")
-        self.gapseq_export_traces_filter = self.findChild(QComboBox, "gapseq_export_traces_filter")
+        self.export_traces_at_import = self.findChild(QCheckBox, "export_traces_at_import")
+        self.gapseq_export_traces_excel = self.findChild(QPushButton, "gapseq_export_traces_excel")
+        self.gapseq_export_traces_dat = self.findChild(QPushButton, "gapseq_export_traces_dat")
+        self.traces_class_filter = self.findChild(QComboBox, "traces_class_filter")
+        self.traces_nucleotide_filter = self.findChild(QComboBox,"traces_nucleotide_filter")
+        self.traces_data_selection = self.findChild(QComboBox,"traces_data_selection")
+        self.traces_background_mode = self.findChild(QComboBox, "traces_background_mode")
 
         self.graph_container.setLayout(QVBoxLayout())
         self.graph_container.setMinimumWidth(100)
@@ -194,7 +199,9 @@ class GapSeqTabWidget(QWidget):
 
         self.gapseq_import_localisations.clicked.connect(partial(self.import_gapseq_data, mode = 'localisations'))
         self.gapseq_import_all.clicked.connect(partial(self.import_gapseq_data, mode='all'))
-        self.gapseq_export_traces.clicked.connect(self.export_traces)
+
+        self.gapseq_export_traces_excel.clicked.connect(partial(self.export_traces, mode = "excel"))
+        self.gapseq_export_traces_dat.clicked.connect(partial(self.export_traces, mode="dat"))
 
         self.viewer.bind_key(key="Alt-1", func=partial(self.keybind_classify_class, key=0), overwrite=True)
         self.viewer.bind_key(key="Alt-1", func=partial(self.keybind_classify_class, key=1), overwrite=True)
@@ -284,65 +291,119 @@ class GapSeqTabWidget(QWidget):
 
                 self.plot_graphs()
 
-    def export_traces(self):
+    def export_traces(self, mode = "excel"):
 
         if "bounding_boxes" in self.viewer.layers:
 
             if "bounding_box_data" in self.box_layer.metadata.keys():
 
-                box_num = len(self.box_layer.data.copy())
+                path = self.viewer.layers["localisation_image"].metadata["path"]
 
-                meta = self.box_layer.metadata.copy()
+                file_name = os.path.basename(path)
+                directory = path.replace(file_name,"")
 
-                bounding_box_data = meta["bounding_box_data"]
-                bounding_box_class = meta["bounding_box_class"]
+                extension = file_name.split(".")[-1]
+                file_name = file_name.replace("."+extension,"_gapseq_traces.txt")
 
-                layers = bounding_box_data.keys()
+                if self.export_traces_at_import.isChecked() is False:
 
-                image_trace_index = []
-                image_trace_layer = []
-                image_trace_class = []
-                image_trace_data = []
-                localisation_trace_index = []
-                localisation_trace_layer = []
-                localisation_trace_class = []
-                localisation_trace_data = []
+                    desktop = os.path.expanduser("~/Desktop")
+                    directory = QFileDialog.getExistingDirectory(self, "Select Directory", desktop)
 
-                for i in range(box_num):
+                if os.path.isdir(directory):
 
-                    for layer in layers:
+                    path = os.path.abspath(os.path.join(directory,file_name))
 
-                        box_data = bounding_box_data[layer][i]
-                        box_class = bounding_box_class[i]
+                    localisation_filter = self.traces_class_filter.currentText()
+                    nucleotide_filter = self.traces_nucleotide_filter.currentText()
+                    background_mode = self.traces_background_mode.currentIndex()
 
-                        if layer == "localisation_image":
+                    box_num = len(self.box_layer.data.copy())
+                    meta = self.box_layer.metadata.copy()
 
-                            localisation_trace_data.append(box_data)
+                    bounding_box_data = meta["bounding_box_data"]
+                    bounding_box_class = meta["bounding_box_class"]
+                    nucleotide_classes = meta["nucleotide_class"]
+                    background_data = meta["background_data"]
 
-                            localisation_trace_index.append(i)
-                            localisation_trace_class.append(box_class)
-                            localisation_trace_layer.append(layer)
+                    layers = list(bounding_box_data.keys())
 
-                        else:
+                    if self.traces_data_selection.currentIndex() == 0:
+                        layers = [layer for layer in layers if layer == "localisation_image"]
+                    if self.traces_data_selection.currentIndex() == 1:
+                        layers = [layer for layer in layers if layer != "localisation_image"]
 
-                            image_trace_data.append(box_data)
+                    image_trace_index = []
+                    image_trace_layer = []
+                    image_trace_class = []
+                    image_trace_nucleotide = []
+                    image_trace_data = []
 
-                            image_trace_index.append(i)
-                            image_trace_class.append(box_class)
-                            image_trace_layer.append(layer)
+                    for i in range(box_num):
 
-                image_trace_data = pd.DataFrame(np.array(image_trace_data).T)
-                localisation_trace_data = pd.DataFrame(np.array(localisation_trace_data).T)
+                        for layer in layers:
 
-                image_trace_data.columns = [image_trace_index,image_trace_layer,image_trace_class]
-                localisation_trace_data.columns = [localisation_trace_index, localisation_trace_layer, localisation_trace_class]
+                            box_data = bounding_box_data[layer][i]
+                            box_class = bounding_box_class[i]
+                            nucleotide_class = nucleotide_classes[i]
 
-                desktop = os.path.expanduser("~/Desktop")
-                path = os.path.join(desktop,"gapseq_traces.xlsx")
+                            if localisation_filter == "None" and nucleotide_filter == "None":
 
-                with pd.ExcelWriter(path) as writer:
-                    localisation_trace_data.to_excel(writer, sheet_name='Localisation Data', index=True, startrow=1, startcol=1)
-                    image_trace_data.to_excel(writer, sheet_name='Image Data', index=True, startrow=1,startcol=1)
+                                if background_mode != 0:
+                                    if background_mode == 1:
+                                        background = background_data[layer]["local_background"][i]
+                                    if background_mode == 2:
+                                        background = background_data[layer]["global_background"][i]
+                                    box_data = list(np.array(box_data) - np.array(background))
+                                    box_data = list(box_data - np.min(box_data))
+
+                                image_trace_data.append(box_data)
+                                image_trace_index.append(i)
+                                image_trace_class.append(box_class)
+                                image_trace_nucleotide.append(nucleotide_class)
+                                image_trace_layer.append(layer)
+
+                            else:
+
+                                if localisation_filter == "None" and nucleotide_filter == nucleotide_class:
+                                    append_data = True
+                                elif localisation_filter == str(box_class) and nucleotide_filter == "None":
+                                    append_data = True
+                                elif localisation_filter == str(box_class) and nucleotide_filter == nucleotide_class:
+                                    append_data = True
+                                else:
+                                    append_data = False
+
+                                if append_data is True:
+
+                                    image_trace_data.append(box_data)
+                                    image_trace_index.append(i)
+                                    image_trace_class.append(box_class)
+                                    image_trace_nucleotide.append(nucleotide_class)
+                                    image_trace_layer.append(layer)
+
+                    if len(image_trace_data) > 0:
+
+                        image_trace_data = np.stack(image_trace_data, axis=0).T
+
+                        if mode == "dat":
+
+                            path = path.replace(".txt",".dat")
+
+                            image_trace_data = pd.DataFrame(image_trace_data,columns=image_trace_index)
+
+                            image_trace_data.to_csv(path, sep=" ", index = False)
+
+                        if mode == "excel":
+
+                            path = path.replace(".txt", ".xlsx")
+
+                            image_trace_data = pd.DataFrame(image_trace_data)
+                            image_trace_data.columns = [image_trace_index,image_trace_layer,image_trace_class,image_trace_nucleotide]
+
+                            with pd.ExcelWriter(path) as writer:
+                                image_trace_data.to_excel(writer, sheet_name='Trace Data', index=True, startrow=1,startcol=1)
+
 
     def import_gapseq_data(self, mode = "all"):
 
