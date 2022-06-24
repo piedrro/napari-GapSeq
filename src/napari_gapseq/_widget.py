@@ -29,6 +29,7 @@ import cv2 as cv
 from skimage import exposure
 # import pyqtgraph as pg
 import matplotlib.pyplot as plt
+from matplotlib.widgets import Button
 from matplotlib.backends.backend_qt5agg import FigureCanvasQT
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 import time
@@ -36,6 +37,7 @@ import json
 from scipy import optimize
 import warnings
 from scipy.spatial import distance
+import ruptures as rpt
 
 plt.style.use('dark_background')
 
@@ -138,14 +140,6 @@ class GapSeqTabWidget(QWidget):
         self.traces_data_selection = self.findChild(QComboBox,"traces_data_selection")
         self.traces_background_mode = self.findChild(QComboBox, "traces_background_mode")
 
-        self.graph_container.setLayout(QVBoxLayout())
-        self.graph_container.setMinimumWidth(100)
-
-        self.canvas = FigureCanvasQTAgg()
-        self.canvas.figure.set_tight_layout(True)
-        self.canvas.figure.patch.set_facecolor("#262930")
-        self.graph_container.layout().addWidget(self.canvas)
-
         self.image_import_channel = self.findChild(QComboBox,"image_import_channel")
         self.image_gap_code = self.findChild(QComboBox,"image_gap_code")
         self.image_sequence_code = self.findChild(QComboBox, "image_sequence_code")
@@ -156,6 +150,34 @@ class GapSeqTabWidget(QWidget):
 
         self.current_coord = None
 
+        self.fit_localisation_number = self.findChild(QSlider,"fit_localisation_number")
+        self.fit_plot_range = self.findChild(QComboBox,"fit_plot_range")
+        self.fit_plot_range_slider = self.findChild(QSlider,"fit_plot_range_slider")
+        self.fit_graph_container = self.findChild(QWidget, "fit_graph_container")
+        self.fit_plot_channel = self.findChild(QComboBox, "fit_plot_channel")
+        self.fit_cpd_mode = self.findChild(QComboBox,"fit_cpd_mode")
+        self.fit_active = self.findChild(QPushButton,"fit_active")
+        self.fit_background_subtraction_mode = self.findChild(QComboBox,"fit_background_subtraction_mode")
+        self.fit_cpd_model = self.findChild(QComboBox,"fit_cpd_model")
+        self.fit_cpd_penalty = self.findChild(QSpinBox,"fit_cpd_penalty")
+
+        #create matplotib plot graph
+        self.graph_container.setLayout(QVBoxLayout())
+        self.graph_container.setMinimumWidth(100)
+        self.canvas = FigureCanvasQTAgg()
+        self.canvas.figure.set_tight_layout(True)
+        self.canvas.figure.patch.set_facecolor("#262930")
+        self.graph_container.layout().addWidget(self.canvas)
+
+        #create matplotlib fit graph
+        self.fit_graph_container.setLayout(QVBoxLayout())
+        self.fit_graph_container.setMinimumWidth(100)
+        self.fit_graph_canvas = FigureCanvasQTAgg()
+        # self.fit_graph_canvas.figure.set_tight_layout(True)
+        self.fit_graph_canvas.figure.patch.set_facecolor("#262930")
+        self.fit_graph_container.layout().addWidget(self.fit_graph_canvas)
+
+
         #events
         self.localisation_threshold.valueChanged.connect(lambda: self.update_slider_label("localisation_threshold"))
         self.localisation_area_min.valueChanged.connect(lambda: self.update_slider_label("localisation_area_min"))
@@ -165,6 +187,8 @@ class GapSeqTabWidget(QWidget):
         self.localisation_minimum_distance.valueChanged.connect(lambda: self.update_slider_label("localisation_minimum_distance"))
         self.plot_localisation_number.valueChanged.connect(lambda: self.update_slider_label("plot_localisation_number"))
         self.plot_frame_number.valueChanged.connect(lambda: self.update_slider_label("plot_frame_number"))
+        self.fit_localisation_number.valueChanged.connect(lambda: self.update_slider_label("fit_localisation_number"))
+
 
         self.update_slider_label("localisation_aspect_ratio")
 
@@ -184,6 +208,8 @@ class GapSeqTabWidget(QWidget):
         self.plot_frame_number.valueChanged.connect(self.plot_graphs)
 
         self.canvas.mpl_connect("button_press_event", self.update_dims_from_plot)
+        self.fit_graph_canvas.mpl_connect("button_press_event", self.manual_break_point_edit)
+        self.fit_graph_canvas.mpl_connect('scroll_event', self.fit_graph_zoom)
 
         self.plot_localisation_classify.clicked.connect(self.classify_localisation)
         self.plot_nucleotide_classify.clicked.connect(self.classify_nucleotide)
@@ -221,7 +247,54 @@ class GapSeqTabWidget(QWidget):
 
         self.viewer.bind_key(key="d", func=partial(self.keybind_delete_event, key='d'), overwrite=True)
 
+        self.fit_active.clicked.connect(self.change_point_detection)
 
+        # self.import_gapseq_data(mode="localisations",path="devdata.txt")
+
+        self.fit_plot_range_slider.valueChanged.connect(self.plot_fit_graph)
+        self.fit_localisation_number.valueChanged.connect(self.plot_fit_graph)
+        self.fit_plot_channel.currentIndexChanged.connect(self.plot_fit_graph)
+        self.fit_plot_range.currentIndexChanged.connect(self.plot_fit_graph)
+        self.fit_background_subtraction_mode.currentIndexChanged.connect(self.plot_fit_graph)
+
+        # self.fit_plot_channel.setCurrentIndex(1)
+        # self.plot_fit_graph()
+
+
+    def fit_graph_zoom(self,event,base_scale = 1.5):
+
+        ax = event.inaxes
+        cur_xlim = ax.get_xlim()
+        cur_ylim = ax.get_ylim()
+        cur_xrange = (cur_xlim[1] - cur_xlim[0])*.5
+        cur_yrange = (cur_ylim[1] - cur_ylim[0])*.5
+        xdata = event.xdata # get event x location
+        ydata = event.ydata # get event y location
+
+        lines = ax.get_lines()
+        line_data = lines[0].get_xdata()
+
+        if event.button == 'up':
+            # deal with zoom in
+            scale_factor = 1 / base_scale
+        elif event.button == 'down':
+            # deal with zoom out
+            scale_factor = base_scale
+        else:
+            print(event.button)
+
+
+        xlim_min = xdata - cur_xrange*scale_factor
+        xlim_max = xdata + cur_xrange*scale_factor
+
+        if xlim_min < 0:
+            xlim_min = 0
+        if xlim_max > len(line_data):
+            xlim_max = len(line_data)
+
+        ax.set_xlim([xlim_min,xlim_max])
+
+        self.fit_graph_canvas.draw()
 
     def keybind_delete_event(self,viewer,key):
 
@@ -404,11 +477,12 @@ class GapSeqTabWidget(QWidget):
                             with pd.ExcelWriter(path) as writer:
                                 image_trace_data.to_excel(writer, sheet_name='Trace Data', index=True, startrow=1,startcol=1)
 
+    def import_gapseq_data(self, mode = "all", path = None):
 
-    def import_gapseq_data(self, mode = "all"):
+        if path == None:
 
-        desktop = os.path.expanduser("~/Desktop")
-        path, _ = QFileDialog.getOpenFileName(self, "Open Files", desktop, "GapSeq Files (*.txt)")
+            desktop = os.path.expanduser("~/Desktop")
+            path, _ = QFileDialog.getOpenFileName(self, "Open Files", desktop, "GapSeq Files (*.txt)")
 
         if os.path.isfile(path):
 
@@ -499,6 +573,8 @@ class GapSeqTabWidget(QWidget):
 
             self.sort_layer_order()
             self.plot_graphs()
+            self.fit_plot_channel.addItems(image_layers)
+            self.plot_fit_graph()
 
     def export_data(self):
 
@@ -575,7 +651,11 @@ class GapSeqTabWidget(QWidget):
         bounding_boxes = self.box_layer.data.copy()
         shape_type = np.unique(self.box_layer.shape_type)[0]
 
-        background_mask = np.zeros((image.shape[-2], image.shape[-1]), dtype=np.uint8)
+        threshold_image = self.localisation_threshold_layer.data
+        background_mask = threshold_image[:, threshold_image.shape[1] // 2:]
+
+        kernel = np.ones((3, 3), np.uint8)
+        background_mask = cv.dilate(background_mask, kernel, iterations=1)
 
         for i in range(len(bounding_boxes)):
             polygon = bounding_boxes[i]
@@ -635,7 +715,7 @@ class GapSeqTabWidget(QWidget):
                     cx,cy = bounding_box_centres[j]
                     box_class = bounding_box_class[j]
                     box_size = bounding_box_size
-                    background_box_size = 10
+                    background_box_size = 20
 
                     data = masked_image[:, int(y1):int(y2), int(x1):int(x2)]
                     data = np.nanmean(data, axis=(1, 2)).tolist()
@@ -741,6 +821,168 @@ class GapSeqTabWidget(QWidget):
 
         self.sort_layer_order()
         self.compute_plot_data()
+
+    def manual_break_point_edit(self, event):
+
+        if event.xdata != None:
+
+            frame_int = int(event.xdata)
+            ax = event.inaxes
+
+            lines = ax.get_lines()
+            layer = [str(line.get_label()) for line in lines if str(line.get_label()) != "Frame"][0]
+
+            meta = self.box_layer.metadata.copy()
+
+            if "break_points" in meta.keys():
+                break_points = meta["break_points"][layer]
+            else:
+                meta["break_points"] = {}
+                break_points = []
+
+            if event.button == 1 and event.xdata != None:
+
+                break_points.append(frame_int)
+
+                meta["break_points"][layer] = break_points
+
+                self.box_layer.metadata = meta
+                self.plot_fit_graph()
+
+            if event.button == 3 and event.xdata != None:
+
+                if len(break_points) > 0:
+
+                    index = (np.abs(np.array(break_points) - frame_int)).argmin()
+                    closest_value = break_points[index]
+
+                    distance = abs(closest_value - frame_int)
+
+                    if distance < 20:
+
+                        del break_points[index]
+
+                        meta["break_points"][layer] = break_points
+
+                        self.box_layer.metadata = meta
+                        self.plot_fit_graph()
+
+    def change_point_detection(self):
+
+        if "bounding_boxes" in self.viewer.layers:
+
+            if "bounding_box_data" in self.box_layer.metadata.keys():
+
+                data = self.get_fit_graph_data()
+                meta = self.box_layer.metadata.copy()
+
+                if data != None:
+
+                    model = self.fit_cpd_model.currentText()
+                    penalty = self.fit_cpd_penalty.value()
+
+                    points = np.array(data["y"])
+                    algo = rpt.Pelt(model=model).fit(points)
+                    result = algo.predict(pen=penalty)
+
+                    meta["break_points"] = {}
+                    meta["break_points"][data["layer"]] = result
+
+                    self.box_layer.metadata = meta
+
+                    self.plot_fit_graph()
+
+    def plot_fit_graph(self, plot_data = None):
+
+        if "bounding_boxes" in self.viewer.layers:
+
+            if "bounding_box_data" in self.box_layer.metadata.keys():
+
+                plot_data = self.get_fit_graph_data()
+
+                if plot_data != None:
+
+                    self.fit_graph_canvas.figure.clf()
+                    axes = self.fit_graph_canvas.figure.add_subplot(111)
+                    axes.set_facecolor("#262930")
+                    axes.plot(plot_data["x"], plot_data["y"], label=plot_data["layer"])
+                    axes.set_xlim(plot_data["x_min"], plot_data["x_max"])
+
+                    break_points = plot_data["break_points"]
+
+                    if len(break_points) > 0:
+
+                        axes.vlines(break_points, ymin = plot_data["y_min"], ymax=plot_data["y_max"], colors="red")
+
+                    self.fit_graph_canvas.figure.tight_layout()
+                    self.fit_graph_canvas.draw()
+
+    def get_fit_graph_data(self, layer = None, localisation_numer = None,
+                           plot_range = None, background_subtraction_mode = None):
+
+        if "bounding_boxes" in self.viewer.layers:
+
+            if "bounding_box_data" in self.box_layer.metadata.keys():
+
+                if localisation_numer is None:
+                    localisation_number = self.fit_localisation_number.value()
+
+                if layer is None:
+                    layer = self.fit_plot_channel.currentText()
+
+                if plot_range is None:
+                    plot_range = self.fit_plot_range.currentText()
+
+                if background_subtraction_mode is None:
+                    background_subtraction_mode = self.fit_background_subtraction_mode.currentIndex()
+
+                bounding_box_data = self.box_layer.metadata["bounding_box_data"]
+                data = bounding_box_data[layer][localisation_number]
+                background_data = self.box_layer.metadata["background_data"]
+
+                if "break_points" in self.box_layer.metadata.keys():
+                    break_points = self.box_layer.metadata["break_points"][layer]
+                else:
+                    break_points = []
+
+                if plot_range != "None":
+
+                    plot_range = int(plot_range)
+
+                    intervals = len(data) / plot_range
+                    self.fit_plot_range_slider.setMaximum(intervals - 1)
+                    plot_range_slider = self.fit_plot_range_slider.value()
+
+                    x_min = (plot_range * plot_range_slider)
+                    x_max = (plot_range * plot_range_slider) + plot_range
+
+                else:
+                    x_min = 0
+                    x_max = len(data)
+
+                if background_subtraction_mode == 1 and background_data != None:
+                    background = background_data[layer]["local_background"][localisation_number]
+                    data = list(np.array(data) - np.array(background))
+                    data = list(data - np.min(data))
+
+                if background_subtraction_mode == 2 and background_data != None:
+                    background = background_data[layer]["global_background"]
+                    data = np.array(data) - np.array(background)
+                    data = list(data - np.min(data))
+
+                x = np.arange(len(data))
+                y = data
+
+                plot_data = dict(x=x,y=y,
+                                 x_min=x_min,x_max=x_max,
+                                 y_min = np.min(y), y_max = np.max(y),
+                                 layer = layer, break_points = break_points)
+
+        else:
+            plot_data = None
+
+        return plot_data
+
 
     def plot_graphs(self):
 
@@ -1158,6 +1400,7 @@ class GapSeqTabWidget(QWidget):
             contours = find_contours(localisation_mask)
 
             bounding_boxes = []
+            background_bounding_boxes = []
             bounding_circles = []
             bounding_box_centres = []
             bounding_box_class = []
@@ -1173,18 +1416,18 @@ class GapSeqTabWidget(QWidget):
 
                     area = cv2.contourArea(cnt)
 
+                    M = cv.moments(cnt)
+                    cx = int(M['m10'] / M['m00'])
+                    cy = int(M['m01'] / M['m00'])
+
+                    size = bounding_box_size
+
+                    polygon = [[cy - size, cx - size],
+                               [cy + size, cx - size],
+                               [cy + size, cx + size],
+                               [cy - size, cx + size]]
+
                     if area > localisation_area_min_value and area < localisation_area_max_value:
-
-                        M = cv.moments(cnt)
-                        cx = int(M['m10'] / M['m00'])
-                        cy = int(M['m01'] / M['m00'])
-
-                        size = bounding_box_size
-
-                        polygon = [[cy - size, cx - size],
-                                   [cy + size, cx - size],
-                                   [cy + size, cx + size],
-                                   [cy - size, cx + size]]
 
                         bounding_boxes.append(polygon)
                         bounding_box_centres.append([cx,cy])
