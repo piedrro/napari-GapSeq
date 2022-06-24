@@ -351,9 +351,6 @@ class GapSeqTabWidget(QWidget):
         xdata = event.xdata # get event x location
         ydata = event.ydata # get event y location
 
-
-        print(event.x)
-
         lines = ax.get_lines()
         line_xdata = lines[0].get_xdata()
         line_ydata = lines[0].get_ydata()
@@ -835,6 +832,7 @@ class GapSeqTabWidget(QWidget):
             self.box_layer.metadata = meta
             self.plot_compute_progress.setValue(0)
             self.plot_graphs()
+            self.plot_fit_graph()
 
     def filter_localisations(self):
 
@@ -1855,7 +1853,6 @@ class GapSeqTabWidget(QWidget):
         image = self.crop_image(image, crop_mode)
 
         folder = os.path.abspath(path).split("\\")[-2]
-        parent_folder = os.path.abspath(path).split("\\")[-3]
 
         if "image_name" not in metadata.keys():
 
@@ -1870,7 +1867,6 @@ class GapSeqTabWidget(QWidget):
             metadata["label_path"] = None
             metadata["crop_mode"] = crop_mode
             metadata["folder"] = folder
-            metadata["parent_folder"] = parent_folder
             metadata["image_shape"] = image.shape
             metadata["dims"] = [image.shape[-1], image.shape[-2]]
             metadata["crop"] = [0, image.shape[-2], 0, image.shape[-1]]

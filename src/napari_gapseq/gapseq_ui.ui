@@ -466,45 +466,6 @@
      </spacer>
     </item>
     <item>
-     <widget class="QLabel" name="label_22">
-      <property name="font">
-       <font>
-        <weight>75</weight>
-        <bold>true</bold>
-       </font>
-      </property>
-      <property name="text">
-       <string>Compute Localisation Traces</string>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QPushButton" name="plot_compute">
-      <property name="text">
-       <string>Compute</string>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QProgressBar" name="plot_compute_progress">
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-        <horstretch>0</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
-      </property>
-      <property name="maximumSize">
-       <size>
-        <width>16777215</width>
-        <height>10</height>
-       </size>
-      </property>
-      <property name="value">
-       <number>0</number>
-      </property>
-     </widget>
-    </item>
-    <item>
      <spacer name="verticalSpacer_2">
       <property name="orientation">
        <enum>Qt::Vertical</enum>
@@ -671,9 +632,48 @@
   </widget>
   <widget class="QWidget" name="tab_plots">
    <attribute name="title">
-    <string>Plots</string>
+    <string>View Traces</string>
    </attribute>
    <layout class="QVBoxLayout" name="verticalLayout_4">
+    <item>
+     <widget class="QLabel" name="label_22">
+      <property name="font">
+       <font>
+        <weight>75</weight>
+        <bold>true</bold>
+       </font>
+      </property>
+      <property name="text">
+       <string>Compute Localisation Traces</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QPushButton" name="plot_compute">
+      <property name="text">
+       <string>Compute Trace Data</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QProgressBar" name="plot_compute_progress">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>16777215</width>
+        <height>10</height>
+       </size>
+      </property>
+      <property name="value">
+       <number>0</number>
+      </property>
+     </widget>
+    </item>
     <item>
      <widget class="QLabel" name="label">
       <property name="font">
@@ -1088,7 +1088,7 @@
   </widget>
   <widget class="QWidget" name="tab_fit">
    <attribute name="title">
-    <string>Fit</string>
+    <string>Fit Traces</string>
    </attribute>
    <layout class="QVBoxLayout" name="verticalLayout_6">
     <item>
