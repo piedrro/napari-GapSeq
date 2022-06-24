@@ -151,8 +151,6 @@ class GapSeqTabWidget(QWidget):
         self.current_coord = None
 
         self.fit_localisation_number = self.findChild(QSlider,"fit_localisation_number")
-        self.fit_plot_range = self.findChild(QComboBox,"fit_plot_range")
-        self.fit_plot_range_slider = self.findChild(QSlider,"fit_plot_range_slider")
         self.fit_graph_container = self.findChild(QWidget, "fit_graph_container")
         self.fit_plot_channel = self.findChild(QComboBox, "fit_plot_channel")
         self.fit_cpd_mode = self.findChild(QComboBox,"fit_cpd_mode")
@@ -251,10 +249,8 @@ class GapSeqTabWidget(QWidget):
 
         # self.import_gapseq_data(mode="localisations",path="devdata.txt")
 
-        self.fit_plot_range_slider.valueChanged.connect(self.plot_fit_graph)
         self.fit_localisation_number.valueChanged.connect(self.plot_fit_graph)
         self.fit_plot_channel.currentIndexChanged.connect(self.plot_fit_graph)
-        self.fit_plot_range.currentIndexChanged.connect(self.plot_fit_graph)
         self.fit_background_subtraction_mode.currentIndexChanged.connect(self.plot_fit_graph)
 
         # self.fit_plot_channel.setCurrentIndex(1)
@@ -272,27 +268,34 @@ class GapSeqTabWidget(QWidget):
         ydata = event.ydata # get event y location
 
         lines = ax.get_lines()
-        line_data = lines[0].get_xdata()
+        line_xdata = lines[0].get_xdata()
+        line_ydata = lines[0].get_ydata()
 
         if event.button == 'up':
             # deal with zoom in
             scale_factor = 1 / base_scale
-        elif event.button == 'down':
+        if event.button == 'down':
             # deal with zoom out
             scale_factor = base_scale
-        else:
-            print(event.button)
-
 
         xlim_min = xdata - cur_xrange*scale_factor
         xlim_max = xdata + cur_xrange*scale_factor
 
         if xlim_min < 0:
             xlim_min = 0
-        if xlim_max > len(line_data):
-            xlim_max = len(line_data)
+        if xlim_max > len(line_xdata):
+            xlim_max = len(line_xdata)
+
+        ydata_crop = np.array(line_ydata)[int(xlim_min):int(xlim_max)]
+        ylim_min = np.min(ydata_crop)
+        ylim_max = np.max(ydata_crop)
+        ylim_range = ylim_max - ylim_min
+
+        ylim_min -= ylim_range*0.1
+        ylim_max += ylim_range*0.1
 
         ax.set_xlim([xlim_min,xlim_max])
+        ax.set_ylim([ylim_min, ylim_max])
 
         self.fit_graph_canvas.draw()
 
@@ -829,6 +832,9 @@ class GapSeqTabWidget(QWidget):
             frame_int = int(event.xdata)
             ax = event.inaxes
 
+            xlim = ax.get_xlim()
+            ylim = ax.get_ylim()
+
             lines = ax.get_lines()
             layer = [str(line.get_label()) for line in lines if str(line.get_label()) != "Frame"][0]
 
@@ -847,7 +853,7 @@ class GapSeqTabWidget(QWidget):
                 meta["break_points"][layer] = break_points
 
                 self.box_layer.metadata = meta
-                self.plot_fit_graph()
+                self.plot_fit_graph(xlim=xlim,ylim=ylim)
 
             if event.button == 3 and event.xdata != None:
 
@@ -865,7 +871,7 @@ class GapSeqTabWidget(QWidget):
                         meta["break_points"][layer] = break_points
 
                         self.box_layer.metadata = meta
-                        self.plot_fit_graph()
+                        self.plot_fit_graph(xlim=xlim,ylim=ylim)
 
     def change_point_detection(self):
 
@@ -892,7 +898,7 @@ class GapSeqTabWidget(QWidget):
 
                     self.plot_fit_graph()
 
-    def plot_fit_graph(self, plot_data = None):
+    def plot_fit_graph(self, plot_data = None, xlim = None, ylim = None):
 
         if "bounding_boxes" in self.viewer.layers:
 
@@ -906,7 +912,14 @@ class GapSeqTabWidget(QWidget):
                     axes = self.fit_graph_canvas.figure.add_subplot(111)
                     axes.set_facecolor("#262930")
                     axes.plot(plot_data["x"], plot_data["y"], label=plot_data["layer"])
-                    axes.set_xlim(plot_data["x_min"], plot_data["x_max"])
+
+                    if xlim != None:
+                        axes.set_xlim(xlim)
+                    else:
+                        axes.set_xlim(plot_data["x_min"], plot_data["x_max"])
+
+                    if ylim != None:
+                        axes.set_ylim(ylim)
 
                     break_points = plot_data["break_points"]
 
@@ -917,8 +930,7 @@ class GapSeqTabWidget(QWidget):
                     self.fit_graph_canvas.figure.tight_layout()
                     self.fit_graph_canvas.draw()
 
-    def get_fit_graph_data(self, layer = None, localisation_numer = None,
-                           plot_range = None, background_subtraction_mode = None):
+    def get_fit_graph_data(self, layer = None, localisation_numer = None, background_subtraction_mode = None):
 
         if "bounding_boxes" in self.viewer.layers:
 
@@ -929,9 +941,6 @@ class GapSeqTabWidget(QWidget):
 
                 if layer is None:
                     layer = self.fit_plot_channel.currentText()
-
-                if plot_range is None:
-                    plot_range = self.fit_plot_range.currentText()
 
                 if background_subtraction_mode is None:
                     background_subtraction_mode = self.fit_background_subtraction_mode.currentIndex()
@@ -945,20 +954,8 @@ class GapSeqTabWidget(QWidget):
                 else:
                     break_points = []
 
-                if plot_range != "None":
-
-                    plot_range = int(plot_range)
-
-                    intervals = len(data) / plot_range
-                    self.fit_plot_range_slider.setMaximum(intervals - 1)
-                    plot_range_slider = self.fit_plot_range_slider.value()
-
-                    x_min = (plot_range * plot_range_slider)
-                    x_max = (plot_range * plot_range_slider) + plot_range
-
-                else:
-                    x_min = 0
-                    x_max = len(data)
+                x_min = 0
+                x_max = len(data)
 
                 if background_subtraction_mode == 1 and background_data != None:
                     background = background_data[layer]["local_background"][localisation_number]
@@ -982,7 +979,6 @@ class GapSeqTabWidget(QWidget):
             plot_data = None
 
         return plot_data
-
 
     def plot_graphs(self):
 

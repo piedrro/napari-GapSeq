@@ -14,7 +14,7 @@
    <string>TabWidget</string>
   </property>
   <property name="currentIndex">
-   <number>0</number>
+   <number>3</number>
   </property>
   <widget class="QWidget" name="tab_localisations">
    <attribute name="title">
@@ -1176,64 +1176,6 @@
         </property>
         <property name="text">
          <string>0</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </item>
-    <item>
-     <layout class="QGridLayout" name="gridLayout_8">
-      <item row="0" column="0">
-       <widget class="QLabel" name="label_37">
-        <property name="text">
-         <string>Plot X Range</string>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="1">
-       <widget class="QComboBox" name="fit_plot_range">
-        <property name="currentIndex">
-         <number>0</number>
-        </property>
-        <item>
-         <property name="text">
-          <string>None</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>50</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>100</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>200</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>500</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>1000</string>
-         </property>
-        </item>
-       </widget>
-      </item>
-      <item row="0" column="2">
-       <widget class="QSlider" name="fit_plot_range_slider">
-        <property name="maximum">
-         <number>9</number>
-        </property>
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
         </property>
        </widget>
       </item>
