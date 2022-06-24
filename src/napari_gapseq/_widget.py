@@ -463,8 +463,6 @@ class GapSeqTabWidget(QWidget):
             if 0 not in breakpoints:
                 breakpoints.insert(0,0)
 
-                print(breakpoints)
-
             breakpoint_trace = []
 
             for i in range(len(breakpoints)-1):
