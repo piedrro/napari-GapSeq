@@ -457,7 +457,7 @@ class GapSeqTabWidget(QWidget):
     def generate_cpd_trace(self,box_data,breakpoints):
 
         if breakpoints == []:
-            breakpoint_trace = [0]*len(box_data)
+            breakpoint_trace = [np.mean(box_data)]*len(box_data)
         else:
 
             if 0 not in breakpoints:
