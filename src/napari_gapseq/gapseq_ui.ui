@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>368</width>
+    <width>511</width>
     <height>750</height>
    </rect>
   </property>
@@ -14,7 +14,7 @@
    <string>TabWidget</string>
   </property>
   <property name="currentIndex">
-   <number>0</number>
+   <number>4</number>
   </property>
   <widget class="QWidget" name="tab_localisations">
    <attribute name="title">
@@ -1278,17 +1278,17 @@
        <widget class="QComboBox" name="fit_cpd_model">
         <item>
          <property name="text">
+          <string>rbf</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
           <string>l2</string>
          </property>
         </item>
         <item>
          <property name="text">
           <string>l1</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>rbf</string>
          </property>
         </item>
        </widget>
@@ -1401,7 +1401,7 @@
     <item>
      <widget class="QPushButton" name="fit_active">
       <property name="text">
-       <string>Detect Change Points (Acitve Image)</string>
+       <string>Detect Change Points (Acitve Localisation)</string>
       </property>
      </widget>
     </item>
@@ -1502,6 +1502,13 @@
       </property>
       <property name="checked">
        <bool>true</bool>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QCheckBox" name="export_cpd_data">
+      <property name="text">
+       <string>Include Change Point Detection Data</string>
       </property>
      </widget>
     </item>

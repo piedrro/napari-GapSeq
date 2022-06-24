@@ -169,6 +169,7 @@ class GapSeqTabWidget(QWidget):
         self.fit_cpd_breakpoints_label = self.findChild(QLabel,"fit_cpd_breakpoints_label")
         self.fit_cpd_jump = self.findChild(QSpinBox,"fit_cpd_jump")
         self.fit_cpd_jump_label = self.findChild(QLabel,"fit_cpd_jump_label")
+        self.export_cpd_data = self.findChild(QCheckBox,"export_cpd_data")
 
         #create matplotib plot graph
         self.graph_container.setLayout(QVBoxLayout())
@@ -197,7 +198,6 @@ class GapSeqTabWidget(QWidget):
         self.plot_localisation_number.valueChanged.connect(lambda: self.update_slider_label("plot_localisation_number"))
         self.plot_frame_number.valueChanged.connect(lambda: self.update_slider_label("plot_frame_number"))
         self.fit_localisation_number.valueChanged.connect(lambda: self.update_slider_label("fit_localisation_number"))
-
 
         self.fit_cpd_mode.currentIndexChanged.connect(self.update_cpd_controls)
 
@@ -260,15 +260,16 @@ class GapSeqTabWidget(QWidget):
 
         self.fit_active.clicked.connect(self.change_point_detection)
 
-        # self.import_gapseq_data(mode="localisations",path="devdata.txt")
+        self.import_gapseq_data(mode="localisations",path="devdata.txt")
 
         self.fit_localisation_number.valueChanged.connect(self.plot_fit_graph)
         self.fit_plot_channel.currentIndexChanged.connect(self.plot_fit_graph)
         self.fit_background_subtraction_mode.currentIndexChanged.connect(self.plot_fit_graph)
         self.update_cpd_controls()
 
-        # self.fit_plot_channel.setCurrentIndex(1)
-        # self.plot_fit_graph()
+        self.fit_plot_channel.setCurrentIndex(1)
+        self.plot_fit_graph()
+        self.change_point_detection()
 
 
     def update_cpd_controls(self):
@@ -424,6 +425,7 @@ class GapSeqTabWidget(QWidget):
                     self.box_layer.metadata = meta
 
                     self.plot_localisation_number.setMaximum(len(bounding_boxes) - 1)
+                    self.fit_localisation_number.setMaximum(len(bounding_boxes) - 1)
 
                     self.plot_graphs()
 
@@ -451,13 +453,40 @@ class GapSeqTabWidget(QWidget):
 
                 self.plot_graphs()
 
+
+    def generate_cpd_trace(self,box_data,breakpoints):
+
+        if breakpoints == []:
+            breakpoint_trace = [0]*len(box_data)
+        else:
+
+            if 0 not in breakpoints:
+                breakpoints.insert(0,0)
+
+                print(breakpoints)
+
+            breakpoint_trace = []
+
+            for i in range(len(breakpoints)-1):
+
+                start = breakpoints[i]
+                end = breakpoints[i+1]
+
+                dat = [np.mean(box_data[start:end])]*(end-start)
+
+                breakpoint_trace.extend(dat)
+
+        return breakpoint_trace
+
     def export_traces(self, mode = "excel"):
 
         if "bounding_boxes" in self.viewer.layers:
 
             if "bounding_box_data" in self.box_layer.metadata.keys():
 
-                path = self.viewer.layers["localisation_image"].metadata["path"]
+                meta = self.box_layer.metadata
+
+                path = meta["image_paths"][meta["image_layers"].index("localisation_image")]
 
                 file_name = os.path.basename(path)
                 directory = path.replace(file_name,"")
@@ -485,6 +514,7 @@ class GapSeqTabWidget(QWidget):
                     bounding_box_class = meta["bounding_box_class"]
                     nucleotide_classes = meta["nucleotide_class"]
                     background_data = meta["background_data"]
+                    bounding_box_breakpoints = meta["bounding_box_breakpoints"]
 
                     layers = list(bounding_box_data.keys())
 
@@ -506,6 +536,7 @@ class GapSeqTabWidget(QWidget):
                             box_data = bounding_box_data[layer][i]
                             box_class = bounding_box_class[i]
                             nucleotide_class = nucleotide_classes[i]
+                            breakpoints = bounding_box_breakpoints[layer][i]
 
                             if localisation_filter == "None" and nucleotide_filter == "None":
 
@@ -523,6 +554,16 @@ class GapSeqTabWidget(QWidget):
                                 image_trace_nucleotide.append(nucleotide_class)
                                 image_trace_layer.append(layer)
 
+                                if self.export_cpd_data.isChecked():
+
+                                    breakpoint_trace = self.generate_cpd_trace(box_data,breakpoints)
+
+                                    image_trace_data.append(breakpoint_trace)
+                                    image_trace_index.append(i)
+                                    image_trace_class.append(box_class)
+                                    image_trace_nucleotide.append(nucleotide_class)
+                                    image_trace_layer.append(layer)
+
                             else:
 
                                 if localisation_filter == "None" and nucleotide_filter == nucleotide_class:
@@ -537,6 +578,16 @@ class GapSeqTabWidget(QWidget):
                                 if append_data is True:
 
                                     image_trace_data.append(box_data)
+                                    image_trace_index.append(i)
+                                    image_trace_class.append(box_class)
+                                    image_trace_nucleotide.append(nucleotide_class)
+                                    image_trace_layer.append(layer)
+
+                                if self.export_cpd_data.isChecked():
+
+                                    breakpoint_trace = self.generate_cpd_trace(box_data, breakpoints)
+
+                                    image_trace_data.append(breakpoint_trace)
                                     image_trace_index.append(i)
                                     image_trace_class.append(box_class)
                                     image_trace_nucleotide.append(nucleotide_class)
@@ -1017,6 +1068,8 @@ class GapSeqTabWidget(QWidget):
         if "bounding_boxes" in self.viewer.layers:
 
             if "bounding_box_data" in self.box_layer.metadata.keys():
+
+                self.fit_localisation_number.setMaximum(len(self.box_layer.data) - 1)
 
                 plot_data = self.get_fit_graph_data()
 
