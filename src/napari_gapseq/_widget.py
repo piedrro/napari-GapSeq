@@ -260,16 +260,16 @@ class GapSeqTabWidget(QWidget):
 
         self.fit_active.clicked.connect(self.change_point_detection)
 
-        # self.import_gapseq_data(mode="localisations",path="devdata.txt")
+        self.import_gapseq_data(mode="localisations",path="devdata.txt")
 
         self.fit_localisation_number.valueChanged.connect(self.plot_fit_graph)
         self.fit_plot_channel.currentIndexChanged.connect(self.plot_fit_graph)
         self.fit_background_subtraction_mode.currentIndexChanged.connect(self.plot_fit_graph)
         self.update_cpd_controls()
 
-        # self.fit_plot_channel.setCurrentIndex(1)
-        # self.plot_fit_graph()
-        # self.change_point_detection()
+        self.fit_plot_channel.setCurrentIndex(1)
+        self.plot_fit_graph()
+        self.change_point_detection()
 
 
     def update_cpd_controls(self):

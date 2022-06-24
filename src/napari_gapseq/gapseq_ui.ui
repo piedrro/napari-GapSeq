@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>511</width>
-    <height>750</height>
+    <height>851</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -1402,6 +1402,13 @@
      <widget class="QPushButton" name="fit_active">
       <property name="text">
        <string>Detect Change Points (Acitve Localisation)</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QPushButton" name="fit_all">
+      <property name="text">
+       <string>Detect Change Points (All Localisations)</string>
       </property>
      </widget>
     </item>

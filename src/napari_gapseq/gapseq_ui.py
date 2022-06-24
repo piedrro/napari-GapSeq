@@ -14,7 +14,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_TabWidget(object):
     def setupUi(self, TabWidget):
         TabWidget.setObjectName("TabWidget")
-        TabWidget.resize(511, 750)
+        TabWidget.resize(511, 851)
         self.tab_localisations = QtWidgets.QWidget()
         self.tab_localisations.setObjectName("tab_localisations")
         self.verticalLayout_2 = QtWidgets.QVBoxLayout(self.tab_localisations)
@@ -540,6 +540,9 @@ class Ui_TabWidget(object):
         self.fit_active = QtWidgets.QPushButton(self.tab_fit)
         self.fit_active.setObjectName("fit_active")
         self.verticalLayout_6.addWidget(self.fit_active)
+        self.fit_all = QtWidgets.QPushButton(self.tab_fit)
+        self.fit_all.setObjectName("fit_all")
+        self.verticalLayout_6.addWidget(self.fit_all)
         spacerItem9 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         self.verticalLayout_6.addItem(spacerItem9)
         TabWidget.addTab(self.tab_fit, "")
@@ -655,7 +658,7 @@ class Ui_TabWidget(object):
         TabWidget.addTab(self.tab, "")
 
         self.retranslateUi(TabWidget)
-        TabWidget.setCurrentIndex(4)
+        TabWidget.setCurrentIndex(0)
         self.localisation_channel.setCurrentIndex(1)
         self.image_import_channel.setCurrentIndex(2)
         QtCore.QMetaObject.connectSlotsByName(TabWidget)
@@ -794,6 +797,7 @@ class Ui_TabWidget(object):
         self.fit_cpd_jump_label.setText(_translate("TabWidget", "Jump"))
         self.fit_cpd_jump.setToolTip(_translate("TabWidget", "Subsample (one every jump points)"))
         self.fit_active.setText(_translate("TabWidget", "Detect Change Points (Acitve Localisation)"))
+        self.fit_all.setText(_translate("TabWidget", "Detect Change Points (All Localisations)"))
         TabWidget.setTabText(TabWidget.indexOf(self.tab_fit), _translate("TabWidget", "Fit Traces"))
         self.label_19.setText(_translate("TabWidget", "Import GapSeq Data"))
         self.gapseq_import_localisations.setText(_translate("TabWidget", "Import GapSeq Localisations"))
