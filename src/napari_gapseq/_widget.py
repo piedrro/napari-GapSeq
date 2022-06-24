@@ -483,7 +483,10 @@ class GapSeqTabWidget(QWidget):
 
                 meta = self.box_layer.metadata
 
-                path = meta["image_paths"][meta["image_layers"].index("localisation_image")]
+                if "image_paths" in meta.keys():
+                    path = meta["image_paths"][meta["image_layers"].index("localisation_image")]
+                else:
+                    path = self.viewer.layers["localisation_image"].metadata["image_path"]
 
                 file_name = os.path.basename(path)
                 directory = path.replace(file_name,"")
