@@ -260,15 +260,15 @@ class GapSeqTabWidget(QWidget):
 
         self.fit_active.clicked.connect(self.change_point_detection)
 
-        self.import_gapseq_data(mode="localisations",path="devdata.txt")
+        # self.import_gapseq_data(mode="localisations",path="devdata.txt")
 
         self.fit_localisation_number.valueChanged.connect(self.plot_fit_graph)
         self.fit_plot_channel.currentIndexChanged.connect(self.plot_fit_graph)
         self.fit_background_subtraction_mode.currentIndexChanged.connect(self.plot_fit_graph)
         self.update_cpd_controls()
 
-        self.fit_plot_channel.setCurrentIndex(1)
-        self.plot_fit_graph()
+        # self.fit_plot_channel.setCurrentIndex(1)
+        # self.plot_fit_graph()
 
 
     def update_cpd_controls(self):
@@ -279,10 +279,10 @@ class GapSeqTabWidget(QWidget):
 
             self.fit_cpd_breakpoints.setVisible(False)
             self.fit_cpd_breakpoints_label.setVisible(False)
-            self.fit_cpd_window_size.setVisible(False)
-            self.fit_cpd_window_size_label.setVisible(False)
             self.fit_cpd_min_size.setVisible(True)
             self.fit_cpd_min_size_label.setVisible(True)
+            self.fit_cpd_window_size.setVisible(False)
+            self.fit_cpd_window_size_label.setVisible(False)
             self.fit_cpd_jump.setVisible(True)
             self.fit_cpd_jump_label.setVisible(True)
             self.fit_cpd_penalty.setVisible(True)
@@ -327,11 +327,19 @@ class GapSeqTabWidget(QWidget):
             self.fit_cpd_penalty.setVisible(True)
             self.fit_cpd_penalty_label.setVisible(True)
 
-        self.fit_cpd_model.setCurrentIndex(0)
-        self.fit_cpd_breakpoints.setValue(10)
-        self.fit_cpd_penalty.setValue(10)
-        self.fit_cpd_window_size.setValue(100)
-        self.fit_cpd_min_size.setValue(2)
+
+        if mode == 4:
+
+            self.fit_cpd_breakpoints.setVisible(True)
+            self.fit_cpd_breakpoints_label.setVisible(True)
+            self.fit_cpd_min_size.setVisible(True)
+            self.fit_cpd_min_size_label.setVisible(True)
+            self.fit_cpd_window_size.setVisible(False)
+            self.fit_cpd_window_size_label.setVisible(False)
+            self.fit_cpd_jump.setVisible(True)
+            self.fit_cpd_jump_label.setVisible(True)
+            self.fit_cpd_penalty.setVisible(False)
+            self.fit_cpd_penalty_label.setVisible(False)
 
     def fit_graph_zoom(self,event,base_scale = 1.5):
 
@@ -342,6 +350,9 @@ class GapSeqTabWidget(QWidget):
         cur_yrange = (cur_ylim[1] - cur_ylim[0])*.5
         xdata = event.xdata # get event x location
         ydata = event.ydata # get event y location
+
+
+        print(event.x)
 
         lines = ax.get_lines()
         line_xdata = lines[0].get_xdata()
@@ -990,8 +1001,12 @@ class GapSeqTabWidget(QWidget):
                         algo = rpt.Window(width=width, model=model, jump=jump).fit(points)
                         result = algo.predict(n_bkps=n_bkps, pen=pen)
                     if mode == 3:
-                        algo = rpt.BottomUp(model=model, jump=jump).fit(points)
+                        algo = rpt.BottomUp(model=model, jump=jump, min_size=min_size).fit(points)
                         result = algo.predict(n_bkps=n_bkps, pen=pen)
+                    if mode == 4:
+                        algo = rpt.Dynp(model=model, min_size=min_size, jump=jump).fit(points)
+                        result = algo.predict(n_bkps=n_bkps)
+
 
                     meta["bounding_box_breakpoints"][data["layer"]][localisation_number] = result
 
