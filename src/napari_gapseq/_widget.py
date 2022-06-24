@@ -809,7 +809,7 @@ class GapSeqTabWidget(QWidget):
                     box_size = bounding_box_size
                     background_box_size = 20
 
-                    data = masked_image[:, int(y1):int(y2), int(x1):int(x2)]
+                    data = image[:, int(y1):int(y2), int(x1):int(x2)]
                     data = np.nanmean(data, axis=(1, 2)).tolist()
 
                     [[y1,x1],[y2,x2]] = [[cy - background_box_size, cx - background_box_size],
@@ -831,6 +831,7 @@ class GapSeqTabWidget(QWidget):
 
             self.box_layer.metadata = meta
             self.plot_compute_progress.setValue(0)
+
             self.plot_graphs()
             self.plot_fit_graph()
 
@@ -1058,9 +1059,12 @@ class GapSeqTabWidget(QWidget):
                 if background_subtraction_mode is None:
                     background_subtraction_mode = self.fit_background_subtraction_mode.currentIndex()
 
-                bounding_box_data = self.box_layer.metadata["bounding_box_data"]
+                meta = self.box_layer.metadata.copy()
+
+                bounding_box_data = meta["bounding_box_data"]
+
                 data = bounding_box_data[layer][localisation_number]
-                background_data = self.box_layer.metadata["background_data"]
+                background_data = meta["background_data"]
 
                 if "bounding_box_breakpoints" in self.box_layer.metadata.keys():
                     break_points = self.box_layer.metadata["bounding_box_breakpoints"][layer][localisation_number]
@@ -1383,13 +1387,19 @@ class GapSeqTabWidget(QWidget):
 
     def localisation_click_events(self, viewer, event):
 
-        if "Control" in event.modifiers and "bounding_boxes" in self.viewer.layers:
+        if "Control" in event.modifiers:
 
             selected_layer = self.viewer.layers.selection.active
             data_coordinates = selected_layer.world_to_data(event.position)
             coord = np.round(data_coordinates).astype(int)
             self.current_coord = coord
-            shape_type = np.unique(self.box_layer.shape_type)[0]
+
+            shape_type = np.unique(self.box_layer.shape_type)
+
+            if len(shape_type) == 0:
+                shape_type = self.localisation_type.currentText()
+            else:
+                shape_type = shape_type[0]
 
             if coord is not None:
 
@@ -1400,18 +1410,24 @@ class GapSeqTabWidget(QWidget):
                 meta = self.box_layer.metadata.copy()
 
                 bounding_box_centres = meta["bounding_box_centres"]
+                bounding_box_class = meta["bounding_box_class"]
+                bounding_box_size = meta["bounding_box_size"]
+                nucleotide_class = meta["nucleotide_class"]
+
+                localisation_type = self.localisation_type.currentText()
+
 
                 box_index = self.box_layer.get_value(coord)[0]
 
                 if box_index is not None:
 
-                    del bounding_boxes[box_index]
-                    del bounding_box_centres[box_index]
+                    if len(bounding_boxes) > 0:
 
-                    meta["bounding_box_centres"] = bounding_box_centres
+                        del bounding_boxes[box_index]
+                        del bounding_box_centres[box_index]
 
-                    self.box_layer.data = bounding_boxes
-                    self.box_layer.metadata = meta
+                        self.box_layer.data = bounding_boxes
+                        self.box_layer.metadata = meta
 
                 else:
 
@@ -1428,9 +1444,14 @@ class GapSeqTabWidget(QWidget):
 
                     bounding_boxes.append(polygon)
                     bounding_box_centres.append(box_centre)
+                    bounding_box_class.append(0)
+                    nucleotide_class.append("N/A")
 
                     meta["bounding_box_size"] = size
                     meta["bounding_box_centres"] = bounding_box_centres
+                    meta["bounding_box_class"] = bounding_box_class
+                    meta["nucleotide_class"] = nucleotide_class
+                    meta["localisation_type"] = self.localisation_type.currentText()
 
                     self.box_layer.data = bounding_boxes
                     self.box_layer.metadata = meta
@@ -1568,27 +1589,14 @@ class GapSeqTabWidget(QWidget):
 
                 self.plot_localisation_number.setMaximum(len(bounding_boxes)-1)
 
-                if "bounding_boxes" in self.viewer.layers:
+                self.box_layer.data = bounding_boxes
+                self.box_layer.metadata = meta
 
-                    if self.localisation_type.currentText() == "Box":
-                        self.box_layer.shape_type = ["Rectangle"]*len(bounding_boxes)
+                if self.localisation_type.currentText() == "Box":
+                    self.box_layer.shape_type = ["Rectangle"]*len(bounding_boxes)
 
-                    if self.localisation_type.currentText() == "Circle":
-                        self.box_layer.shape_type = ["Ellipse"]*len(bounding_boxes)
-
-                    self.box_layer.data = bounding_boxes
-                    self.box_layer.metadata = meta
-
-                else:
-
-                    if self.localisation_type.currentText() == "Box":
-
-                        self.box_layer = self.viewer.add_shapes(bounding_boxes, name = "bounding_boxes", shape_type='Rectangle', edge_width=1, edge_color='red', face_color=[0, 0, 0, 0], opacity=0.3, metadata=meta)
-
-                    if self.localisation_type.currentText() == "Circle":
-
-                        self.box_layer = self.viewer.add_shapes(bounding_boxes, name="bounding_boxes", shape_type='Ellipse',edge_width=1, edge_color='red', face_color=[0, 0, 0, 0],opacity=0.3, metadata=meta)
-
+                if self.localisation_type.currentText() == "Circle":
+                    self.box_layer.shape_type = ["Ellipse"]*len(bounding_boxes)
 
                 self.fit_localisations()
                 self.box_layer.mouse_drag_callbacks.append(self.localisation_click_events)
@@ -1648,7 +1656,6 @@ class GapSeqTabWidget(QWidget):
                     fitted_bounding_box_centres.append([cx, cy])
                     fitted_bounding_box_class.append(0)
                     fitted_nucleotide_class.append("N/A")
-
 
             except:
                 pass
@@ -1771,6 +1778,12 @@ class GapSeqTabWidget(QWidget):
                 meta["localisation_threshold"] = localisation_threshold
                 meta["path"] = path
 
+            meta["bounding_box_centres"] = []
+            meta["bounding_box_class"] = []
+            meta["bounding_box_size"] = []
+            meta["nucleotide_class"] = []
+            meta["localisation_type"] = []
+            meta["background_data"] = {"global_background": [],"local_background": []}
 
             if "localisation_image" in self.viewer.layers:
 
@@ -1781,6 +1794,14 @@ class GapSeqTabWidget(QWidget):
 
             else:
 
+                if "bounding_boxes" not in self.viewer.layers:
+
+                    if self.localisation_type.currentText() == "Box":
+                        self.box_layer = self.viewer.add_shapes(name="bounding_boxes", shape_type='Rectangle',edge_width=1, edge_color='red', face_color=[0, 0, 0, 0],opacity=0.3, metadata=meta)
+
+                    if self.localisation_type.currentText() == "Circle":
+                        self.box_layer = self.viewer.add_shapes(name="bounding_boxes", shape_type='Ellipse',edge_width=1, edge_color='red', face_color=[0, 0, 0, 0],opacity=0.3, metadata=meta)
+
                 self.localisation_image_layer = self.viewer.add_image(image, name="localisation_image",metadata=meta)
                 self.localisation_threshold_layer = self.viewer.add_image(localisation_threshold_image, name="localisation_threshold", metadata=meta)
 
@@ -1788,7 +1809,7 @@ class GapSeqTabWidget(QWidget):
                 self.localisation_threshold_layer.mouse_drag_callbacks.append(self.localisation_click_events)
 
             self.plot_frame_number.setMaximum(image.shape[0]-1)
-
+            self.fit_plot_channel.addItems(["localisation_image"])
             self.viewer.reset_view()
             self.sort_layer_order()
 
@@ -1822,6 +1843,7 @@ class GapSeqTabWidget(QWidget):
                 self.viewer.layers[layer_name].mouse_drag_callbacks.append(self.localisation_click_events)
 
             self.sort_layer_order()
+            self.fit_plot_channel.addItems(layer_name)
 
     def sort_layer_order(self):
 
