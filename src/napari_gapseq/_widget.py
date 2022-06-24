@@ -1425,6 +1425,12 @@ class GapSeqTabWidget(QWidget):
 
                         del bounding_boxes[box_index]
                         del bounding_box_centres[box_index]
+                        del bounding_box_class[box_index]
+                        del nucleotide_class[box_index]
+
+                        meta["bounding_box_centres"] = bounding_box_centres
+                        meta["bounding_box_class"] = bounding_box_class
+                        meta["nucleotide_class"] = nucleotide_class
 
                         self.box_layer.data = bounding_boxes
                         self.box_layer.metadata = meta
