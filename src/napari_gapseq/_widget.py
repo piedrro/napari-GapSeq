@@ -453,7 +453,6 @@ class GapSeqTabWidget(QWidget):
 
                 self.plot_graphs()
 
-
     def generate_cpd_trace(self,box_data,breakpoints):
 
         if breakpoints == []:
@@ -1016,7 +1015,7 @@ class GapSeqTabWidget(QWidget):
                         self.box_layer.metadata = meta
                         self.plot_fit_graph(xlim=xlim,ylim=ylim)
 
-    def change_point_detection(self):
+    def change_point_detection(self, localisation_number = None):
 
         if "bounding_boxes" in self.viewer.layers:
 
@@ -1026,7 +1025,9 @@ class GapSeqTabWidget(QWidget):
                 meta = self.box_layer.metadata.copy()
                 mode = self.fit_cpd_mode.currentIndex()
 
-                localisation_number = self.fit_localisation_number.value()
+                if localisation_number == None:
+
+                    localisation_number = self.fit_localisation_number.value()
 
                 if data != None:
 
