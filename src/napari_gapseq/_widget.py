@@ -9,7 +9,8 @@ Replace code below according to your needs.
 
 from qtpy.QtWidgets import (QWidget,QVBoxLayout,QTabWidget,QCheckBox,QLabel,QLineEdit,QFileDialog,
                             QComboBox,QPushButton,QProgressBar,QTextEdit,QSlider,QSpinBox, QSpacerItem, QSizePolicy)
-from qtpy.QtCore import (QObject,QRunnable,QThreadPool)
+from PyQt5 import QtWidgets, QtCore
+from qtpy.QtCore import (QObject,QRunnable,QThreadPool,)
 from PyQt5.QtCore import pyqtSignal,pyqtSlot
 import sys
 from functools import partial
@@ -170,6 +171,9 @@ class GapSeqTabWidget(QWidget):
         self.fit_cpd_jump = self.findChild(QSpinBox,"fit_cpd_jump")
         self.fit_cpd_jump_label = self.findChild(QLabel,"fit_cpd_jump_label")
         self.export_cpd_data = self.findChild(QCheckBox,"export_cpd_data")
+        self.show_cpd_breakpoints = self.findChild(QCheckBox,"show_cpd_breakpoints")
+        self.show_cpd_states = self.findChild(QCheckBox,"show_cpd_states")
+        self.fit_hmm_states = self.findChild(QSpinBox,"fit_hmm_states")
 
         #create matplotib plot graph
         self.graph_container.setLayout(QVBoxLayout())
@@ -183,7 +187,9 @@ class GapSeqTabWidget(QWidget):
         self.fit_graph_container.setLayout(QVBoxLayout())
         self.fit_graph_container.setMinimumWidth(100)
         self.fit_graph_canvas = FigureCanvasQTAgg()
-        # self.fit_graph_canvas.figure.set_tight_layout(True)
+        self.fit_graph_canvas.setFocusPolicy(QtCore.Qt.ClickFocus)
+        self.fit_graph_canvas.setFocus()
+        self.fit_graph_canvas.figure.set_tight_layout(True)
         self.fit_graph_canvas.figure.patch.set_facecolor("#262930")
         self.fit_graph_container.layout().addWidget(self.fit_graph_canvas)
 
@@ -200,6 +206,8 @@ class GapSeqTabWidget(QWidget):
         self.fit_localisation_number.valueChanged.connect(lambda: self.update_slider_label("fit_localisation_number"))
 
         self.fit_cpd_mode.currentIndexChanged.connect(self.update_cpd_controls)
+        self.show_cpd_breakpoints.stateChanged.connect(self.plot_fit_graph)
+        self.show_cpd_states.stateChanged.connect(self.plot_fit_graph)
 
         self.update_slider_label("localisation_aspect_ratio")
 
@@ -221,6 +229,8 @@ class GapSeqTabWidget(QWidget):
         self.canvas.mpl_connect("button_press_event", self.update_dims_from_plot)
         self.fit_graph_canvas.mpl_connect("button_press_event", self.manual_break_point_edit)
         self.fit_graph_canvas.mpl_connect('scroll_event', self.fit_graph_zoom)
+        self.fit_graph_canvas.mpl_connect('key_press_event', self.manual_state_edit)
+
 
         self.plot_localisation_classify.clicked.connect(self.classify_localisation)
         self.plot_nucleotide_classify.clicked.connect(self.classify_nucleotide)
@@ -260,16 +270,13 @@ class GapSeqTabWidget(QWidget):
 
         self.fit_active.clicked.connect(self.change_point_detection)
 
-        self.import_gapseq_data(mode="localisations",path="devdata.txt")
-
         self.fit_localisation_number.valueChanged.connect(self.plot_fit_graph)
         self.fit_plot_channel.currentIndexChanged.connect(self.plot_fit_graph)
         self.fit_background_subtraction_mode.currentIndexChanged.connect(self.plot_fit_graph)
         self.update_cpd_controls()
 
-        self.fit_plot_channel.setCurrentIndex(1)
-        self.plot_fit_graph()
-        self.change_point_detection()
+        # self.import_gapseq_data(mode="localisations",path=r"C:/napari-gapseq/src/napari_gapseq/dev/devdata.txt")
+        # self.change_point_detection()
 
 
     def update_cpd_controls(self):
@@ -280,16 +287,32 @@ class GapSeqTabWidget(QWidget):
 
             self.fit_cpd_breakpoints.setVisible(False)
             self.fit_cpd_breakpoints_label.setVisible(False)
-            self.fit_cpd_min_size.setVisible(True)
-            self.fit_cpd_min_size_label.setVisible(True)
+            self.fit_cpd_min_size.setVisible(False)
+            self.fit_cpd_min_size_label.setVisible(False)
             self.fit_cpd_window_size.setVisible(False)
             self.fit_cpd_window_size_label.setVisible(False)
-            self.fit_cpd_jump.setVisible(True)
-            self.fit_cpd_jump_label.setVisible(True)
-            self.fit_cpd_penalty.setVisible(True)
-            self.fit_cpd_penalty_label.setVisible(True)
+            self.fit_cpd_jump.setVisible(False)
+            self.fit_cpd_jump_label.setVisible(False)
+            self.fit_cpd_penalty.setVisible(False)
+            self.fit_cpd_penalty_label.setVisible(False)
 
         if mode == 1:
+
+            self.fit_cpd_model_label.setVisible(True)
+            self.fit_cpd_model.setVisible(True)
+            self.fit_cpd_breakpoints_label.setVisible(False)
+            self.fit_cpd_breakpoints.setVisible(False)
+            self.fit_cpd_min_size_label.setVisible(True)
+            self.fit_cpd_min_size.setVisible(True)
+            self.fit_cpd_window_size_label.setVisible(False)
+            self.fit_cpd_window_size.setVisible(False)
+            self.fit_cpd_jump_label.setVisible(True)
+            self.fit_cpd_jump.setVisible(True)
+            self.fit_cpd_penalty_label.setVisible(True)
+            self.fit_cpd_penalty.setVisible(True)
+
+
+        if mode == 2:
 
             self.fit_cpd_breakpoints.setVisible(True)
             self.fit_cpd_breakpoints_label.setVisible(True)
@@ -302,7 +325,7 @@ class GapSeqTabWidget(QWidget):
             self.fit_cpd_penalty.setVisible(True)
             self.fit_cpd_penalty_label.setVisible(True)
 
-        if mode == 2:
+        if mode == 3:
 
             self.fit_cpd_breakpoints.setVisible(True)
             self.fit_cpd_breakpoints_label.setVisible(True)
@@ -315,7 +338,7 @@ class GapSeqTabWidget(QWidget):
             self.fit_cpd_penalty.setVisible(True)
             self.fit_cpd_penalty_label.setVisible(True)
 
-        if mode == 3:
+        if mode == 4:
 
             self.fit_cpd_breakpoints.setVisible(True)
             self.fit_cpd_breakpoints_label.setVisible(True)
@@ -329,7 +352,7 @@ class GapSeqTabWidget(QWidget):
             self.fit_cpd_penalty_label.setVisible(True)
 
 
-        if mode == 4:
+        if mode == 5:
 
             self.fit_cpd_breakpoints.setVisible(True)
             self.fit_cpd_breakpoints_label.setVisible(True)
@@ -453,7 +476,52 @@ class GapSeqTabWidget(QWidget):
 
                 self.plot_graphs()
 
-    def generate_cpd_trace(self,box_data,breakpoints):
+    def fit_hmm(self, data, n_components, model = None, reorder = True):
+
+        x = np.reshape(data, [len(data), 1])
+
+        if model == None:
+            from hmmlearn.hmm import GaussianHMM
+            model = GaussianHMM(n_components=n_components, n_iter=1000).fit(x)
+
+        detected_states = model.predict(x)
+        mus = np.array(model.means_)
+
+        state_means = mus.flatten()
+        state_index = np.arange(len(mus))
+
+        state_means, state_index = zip(*sorted(zip(state_means, state_index), key=lambda x: x[0]))
+
+        if reorder == True:
+
+            reordered_states = np.zeros_like(detected_states)
+
+            for i in range(len(np.unique(detected_states))):
+
+                old_state = np.unique(detected_states)[i]
+                new_state = np.where(state_index == old_state)[0][0]
+
+                reordered_states[detected_states == old_state] = new_state
+
+            hmm_states = reordered_states
+
+        else:
+
+            hmm_states = detected_states
+
+        breakpoints = []
+        for i in range(len(hmm_states) - 1):
+            if hmm_states[i] != hmm_states[i + 1]:
+                breakpoints.append(i)
+
+        return hmm_states.tolist(), breakpoints
+
+    def generate_cpd_trace(self,box_data,breakpoints, mode = "hmm", n_components = 2):
+
+        if mode == "hmm":
+            from hmmlearn.hmm import GaussianHMM
+            x = np.reshape(box_data,[len(box_data),1])
+            model = GaussianHMM(n_components=n_components, n_iter=1000).fit(x)
 
         if breakpoints == []:
             breakpoint_trace = [np.mean(box_data)]*len(box_data)
@@ -464,14 +532,25 @@ class GapSeqTabWidget(QWidget):
 
             breakpoint_trace = []
 
+            breakpoints.sort()
+
             for i in range(len(breakpoints)-1):
 
                 start = breakpoints[i]
                 end = breakpoints[i+1]
+                data = box_data[start:end].copy()
 
-                dat = [np.mean(box_data[start:end])]*(end-start)
+                if mode == "mean":
+                    mean = np.mean(data)
+                    value = [mean]*(end-start)
+                    breakpoint_trace.extend(value)
 
-                breakpoint_trace.extend(dat)
+                if mode == "hmm":
+                    states, _ = self.fit_hmm(data,n_components, model= model)
+                    vals, counts = np.unique(states, return_counts=True)
+                    state = vals[np.argmax(counts)]
+                    value = [state] * (end - start)
+                    breakpoint_trace.extend(value)
 
         return breakpoint_trace
 
@@ -515,6 +594,7 @@ class GapSeqTabWidget(QWidget):
                     nucleotide_classes = meta["nucleotide_class"]
                     background_data = meta["background_data"]
                     bounding_box_breakpoints = meta["bounding_box_breakpoints"]
+                    bounding_box_traces = meta["bounding_box_traces"]
 
                     layers = list(bounding_box_data.keys())
 
@@ -537,6 +617,11 @@ class GapSeqTabWidget(QWidget):
                             box_class = bounding_box_class[i]
                             nucleotide_class = nucleotide_classes[i]
                             breakpoints = bounding_box_breakpoints[layer][i]
+                            trace = bounding_box_traces[layer][i]
+
+                            if trace == []:
+
+                                trace = [0]*len(box_data)
 
                             if localisation_filter == "None" and nucleotide_filter == "None":
 
@@ -556,9 +641,7 @@ class GapSeqTabWidget(QWidget):
 
                                 if self.export_cpd_data.isChecked():
 
-                                    breakpoint_trace = self.generate_cpd_trace(box_data,breakpoints)
-
-                                    image_trace_data.append(breakpoint_trace)
+                                    image_trace_data.append(trace)
                                     image_trace_index.append(i)
                                     image_trace_class.append(box_class)
                                     image_trace_nucleotide.append(nucleotide_class)
@@ -628,11 +711,9 @@ class GapSeqTabWidget(QWidget):
                 gapseq_data = json.load(f)
 
             bounding_boxes = gapseq_data["bounding_boxes"]
-            bounding_box_breakpoints = gapseq_data["bounding_box_breakpoints"]
             image_layers = gapseq_data["image_layers"]
             image_paths = gapseq_data["image_paths"]
             image_metadata = gapseq_data["image_metadata"]
-            localisation_threshold = gapseq_data["localisation_threshold"]
             meta = {}
 
             if mode == "all":
@@ -686,6 +767,7 @@ class GapSeqTabWidget(QWidget):
             meta["nucleotide_class"] = gapseq_data["nucleotide_class"]
             meta["localisation_type"] = gapseq_data["localisation_type"]
             meta["bounding_box_breakpoints"] = gapseq_data["bounding_box_breakpoints"]
+            meta["bounding_box_traces"] = gapseq_data["bounding_box_traces"]
 
             if "bounding_boxes" in self.viewer.layers:
 
@@ -702,7 +784,7 @@ class GapSeqTabWidget(QWidget):
 
                 if meta["localisation_type"] == "Box":
 
-                    self.box_layer = self.viewer.add_shapes(bounding_boxes, name="bounding_boxes", shape_type='Rectangle', edge_width=1, edge_color='red', face_color=[0, 0, 0, 0], opacity=0.3, metadata=gapseq_data)
+                    self.box_layer = self.viewer.add_shapes(bounding_boxes, name="bounding_boxes", shape_type='Rectangle', edge_width=1, edge_color='red', face_color=[0, 0, 0, 0], opacity=0.3, metadata=meta)
                     self.box_layer.mouse_drag_callbacks.append(self.localisation_click_events)
 
                 if meta["localisation_type"] == "Circle":
@@ -723,8 +805,6 @@ class GapSeqTabWidget(QWidget):
 
                 bounding_boxes = self.box_layer.data.copy()
 
-                bounding_boxes = [box.tolist() for box in bounding_boxes]
-
                 meta = self.box_layer.metadata.copy()
 #
                 bounding_box_data = meta["bounding_box_data"]
@@ -736,7 +816,9 @@ class GapSeqTabWidget(QWidget):
                 nucleotide_class = meta["nucleotide_class"]
                 localisation_type = meta["localisation_type"]
                 bounding_box_breakpoints = meta["bounding_box_breakpoints"]
+                bounding_box_traces = meta["bounding_box_traces"]
 
+                bounding_boxes = [box.tolist() for box in bounding_boxes]
 
                 if "image_paths" not in meta.keys():
 
@@ -782,7 +864,8 @@ class GapSeqTabWidget(QWidget):
                                        background_data = background_data,
                                        nucleotide_class = nucleotide_class,
                                        localisation_type = localisation_type,
-                                       bounding_box_breakpoints = bounding_box_breakpoints)
+                                       bounding_box_breakpoints = bounding_box_breakpoints,
+                                       bounding_box_traces = bounding_box_traces)
 
                     with open(path, 'w', encoding='utf-8') as f:
                         json.dump(gapseq_data, f, ensure_ascii=False, indent=4)
@@ -834,6 +917,7 @@ class GapSeqTabWidget(QWidget):
             layer_image_shape = {}
             bounding_box_data = {}
             bounding_box_breakpoints = {}
+            bounding_box_traces = {}
             background_data = {}
 
             for i in range(len(image_layers)):
@@ -842,6 +926,7 @@ class GapSeqTabWidget(QWidget):
                 layer = image_layers[i]
                 bounding_box_data[layer] = []
                 bounding_box_breakpoints[layer] = []
+                bounding_box_traces[layer] = []
                 layer_image_shape[layer] = image.shape
 
                 background_image, masked_image = self.get_background_mask(bounding_boxes, bounding_box_size, bounding_box_centres, image)
@@ -870,6 +955,7 @@ class GapSeqTabWidget(QWidget):
 
                     bounding_box_data[layer].append(data)
                     bounding_box_breakpoints[layer].append([])
+                    bounding_box_traces[layer].append([0]*len(data))
                     background_data[layer]["local_background"].append(local_background_data)
 
                     self.plot_compute_progress.setValue(progress)
@@ -879,6 +965,7 @@ class GapSeqTabWidget(QWidget):
             meta["image_layers"] = image_layers
             meta["background_data"] = background_data
             meta["bounding_box_breakpoints"] = bounding_box_breakpoints
+            meta["bounding_box_traces"] = bounding_box_traces
 
             self.box_layer.metadata = meta
             self.plot_compute_progress.setValue(0)
@@ -969,6 +1056,37 @@ class GapSeqTabWidget(QWidget):
         self.sort_layer_order()
         self.compute_plot_data()
 
+    def manual_state_edit(self, event):
+
+        if event.xdata != None:
+
+            key = event.key
+
+            if key.isdigit():
+
+                localisation_number = self.fit_localisation_number.value()
+
+                frame_int = int(event.xdata)
+                ax = self.fit_graph_canvas.figure.axes[0]
+
+                lines = ax.get_lines()
+                layer = [str(line.get_label()) for line in lines if str(line.get_label()) != "Frame"][0]
+
+                meta = self.box_layer.metadata.copy()
+
+                break_points = meta["bounding_box_breakpoints"][layer][localisation_number]
+                bounding_box_trace = meta["bounding_box_traces"][layer][localisation_number]
+
+                start = break_points[np.max(np.where(np.array(break_points) < frame_int))]
+                end = break_points[np.min(np.where(np.array(break_points) > frame_int))]
+
+                bounding_box_trace[start:end] = [int(key)] * (end-start)
+
+                meta["bounding_box_traces"][layer][localisation_number] = bounding_box_trace
+                self.box_layer.metadata = meta
+
+                self.plot_fit_graph()
+
     def manual_break_point_edit(self, event):
 
         if event.xdata != None:
@@ -976,7 +1094,7 @@ class GapSeqTabWidget(QWidget):
             localisation_number = self.fit_localisation_number.value()
 
             frame_int = int(event.xdata)
-            ax = event.inaxes
+            ax = self.fit_graph_canvas.figure.axes[0]
 
             xlim = ax.get_xlim()
             ylim = ax.get_ylim()
@@ -985,6 +1103,8 @@ class GapSeqTabWidget(QWidget):
             layer = [str(line.get_label()) for line in lines if str(line.get_label()) != "Frame"][0]
 
             meta = self.box_layer.metadata.copy()
+            data = meta["bounding_box_data"][layer][localisation_number]
+            hmm_states = self.fit_hmm_states.value()
 
             if "bounding_box_breakpoints" in meta.keys():
                 break_points = meta["bounding_box_breakpoints"][layer][localisation_number]
@@ -995,7 +1115,9 @@ class GapSeqTabWidget(QWidget):
 
                 break_points.append(frame_int)
 
+                bounding_box_trace = self.generate_cpd_trace(data,break_points,mode="hmm",n_components=hmm_states)
                 meta["bounding_box_breakpoints"][layer][localisation_number] = break_points
+                meta["bounding_box_traces"][layer][localisation_number] = bounding_box_trace
 
                 self.box_layer.metadata = meta
                 self.plot_fit_graph(xlim=xlim,ylim=ylim)
@@ -1013,7 +1135,9 @@ class GapSeqTabWidget(QWidget):
 
                         del break_points[index]
 
+                        bounding_box_trace = self.generate_cpd_trace(data,break_points,mode="hmm",n_components=hmm_states)
                         meta["bounding_box_breakpoints"][layer][localisation_number] = break_points
+                        meta["bounding_box_traces"][layer][localisation_number] = bounding_box_trace
 
                         self.box_layer.metadata = meta
                         self.plot_fit_graph(xlim=xlim,ylim=ylim)
@@ -1027,9 +1151,9 @@ class GapSeqTabWidget(QWidget):
                 data = self.get_fit_graph_data()
                 meta = self.box_layer.metadata.copy()
                 mode = self.fit_cpd_mode.currentIndex()
+                hmm_states = self.fit_hmm_states.value()
 
-                if localisation_number == None:
-
+                if type(localisation_number) != int:
                     localisation_number = self.fit_localisation_number.value()
 
                 if data != None:
@@ -1044,23 +1168,28 @@ class GapSeqTabWidget(QWidget):
                     n_bkps = self.fit_cpd_breakpoints.value()
 
                     if mode == 0:
-                        algo = rpt.Pelt(model=model, jump=jump).fit(points)
-                        result = algo.predict(pen=pen)
+                        bounding_box_trace, breakpoints = self.fit_hmm(points,hmm_states)
                     if mode == 1:
-                        algo = rpt.Binseg(model=model,min_size=min_size, jump=jump).fit(points)
-                        result =algo.predict(n_bkps=n_bkps, pen=pen)
+                        algo = rpt.Pelt(model=model, jump=jump).fit(points)
+                        breakpoints = algo.predict(pen=pen)
                     if mode == 2:
-                        algo = rpt.Window(width=width, model=model, jump=jump).fit(points)
-                        result = algo.predict(n_bkps=n_bkps, pen=pen)
+                        algo = rpt.Binseg(model=model,min_size=min_size, jump=jump).fit(points)
+                        breakpoints =algo.predict(n_bkps=n_bkps, pen=pen)
                     if mode == 3:
-                        algo = rpt.BottomUp(model=model, jump=jump, min_size=min_size).fit(points)
-                        result = algo.predict(n_bkps=n_bkps, pen=pen)
+                        algo = rpt.Window(width=width, model=model, jump=jump).fit(points)
+                        breakpoints = algo.predict(n_bkps=n_bkps, pen=pen)
                     if mode == 4:
+                        algo = rpt.BottomUp(model=model, jump=jump, min_size=min_size).fit(points)
+                        breakpoints = algo.predict(n_bkps=n_bkps, pen=pen)
+                    if mode == 5:
                         algo = rpt.Dynp(model=model, min_size=min_size, jump=jump).fit(points)
-                        result = algo.predict(n_bkps=n_bkps)
+                        breakpoints = algo.predict(n_bkps=n_bkps)
 
+                    if mode != 0:
+                        bounding_box_trace = self.generate_cpd_trace(points, breakpoints, mode = "hmm", n_components = hmm_states)
 
-                    meta["bounding_box_breakpoints"][data["layer"]][localisation_number] = result
+                    meta["bounding_box_breakpoints"][data["layer"]][localisation_number] = breakpoints
+                    meta["bounding_box_traces"][data["layer"]][localisation_number] = bounding_box_trace
 
                     self.box_layer.metadata = meta
                     self.plot_fit_graph()
@@ -1077,10 +1206,15 @@ class GapSeqTabWidget(QWidget):
 
                 if plot_data != None:
 
+                    x = plot_data["x"]
+                    y = plot_data["y"]
+                    localisation_number = plot_data["localisation_number"]
+                    bounding_box_trace = plot_data["bounding_box_trace"]
+
                     self.fit_graph_canvas.figure.clf()
                     axes = self.fit_graph_canvas.figure.add_subplot(111)
                     axes.set_facecolor("#262930")
-                    axes.plot(plot_data["x"], plot_data["y"], label=plot_data["layer"])
+                    axes.plot(x, y, label=plot_data["layer"])
 
                     if xlim != None:
                         axes.set_xlim(xlim)
@@ -1092,60 +1226,73 @@ class GapSeqTabWidget(QWidget):
 
                     break_points = plot_data["break_points"]
 
-                    if len(break_points) > 0:
+                    if len(break_points) > 0 and self.show_cpd_breakpoints.isChecked():
+                        axes.vlines(break_points, ymin = plot_data["y_min"], ymax=plot_data["y_max"], colors="red",label="Change Points")
 
-                        axes.vlines(break_points, ymin = plot_data["y_min"], ymax=plot_data["y_max"], colors="red")
+                    if self.show_cpd_states.isChecked():
+                        axes2 = axes.twinx()
+                        axes2.plot(bounding_box_trace, color='blue',label="States")
 
                     self.fit_graph_canvas.figure.tight_layout()
                     self.fit_graph_canvas.draw()
 
-    def get_fit_graph_data(self, layer = None, localisation_numer = None, background_subtraction_mode = None):
+    def get_fit_graph_data(self, layer = None, localisation_number = None, background_subtraction_mode = None):
 
         if "bounding_boxes" in self.viewer.layers:
 
             if "bounding_box_data" in self.box_layer.metadata.keys():
 
-                if localisation_numer is None:
-                    localisation_number = self.fit_localisation_number.value()
+                try:
 
-                if layer is None:
-                    layer = self.fit_plot_channel.currentText()
+                    if localisation_number is None:
+                        localisation_number = self.fit_localisation_number.value()
 
-                if background_subtraction_mode is None:
-                    background_subtraction_mode = self.fit_background_subtraction_mode.currentIndex()
+                    if layer is None:
+                        layer = self.fit_plot_channel.currentText()
 
-                meta = self.box_layer.metadata.copy()
+                    if background_subtraction_mode is None:
+                        background_subtraction_mode = self.fit_background_subtraction_mode.currentIndex()
 
-                bounding_box_data = meta["bounding_box_data"]
+                    meta = self.box_layer.metadata.copy()
 
-                data = bounding_box_data[layer][localisation_number]
-                background_data = meta["background_data"]
+                    bounding_box_data = meta["bounding_box_data"]
 
-                if "bounding_box_breakpoints" in self.box_layer.metadata.keys():
-                    break_points = self.box_layer.metadata["bounding_box_breakpoints"][layer][localisation_number]
-                else:
-                    break_points = []
+                    data = bounding_box_data[layer][localisation_number]
+                    background_data = meta["background_data"]
 
-                x_min = 0
-                x_max = len(data)
 
-                if background_subtraction_mode == 1 and background_data != None:
-                    background = background_data[layer]["local_background"][localisation_number]
-                    data = list(np.array(data) - np.array(background))
-                    data = list(data - np.min(data))
+                    if "bounding_box_breakpoints" in self.box_layer.metadata.keys():
+                        break_points = self.box_layer.metadata["bounding_box_breakpoints"][layer][localisation_number]
+                        bounding_box_trace = meta["bounding_box_traces"][layer][localisation_number]
+                    else:
+                        break_points = []
+                        bounding_box_trace = [0]*len(data)
 
-                if background_subtraction_mode == 2 and background_data != None:
-                    background = background_data[layer]["global_background"]
-                    data = np.array(data) - np.array(background)
-                    data = list(data - np.min(data))
+                    x_min = 0
+                    x_max = len(data)
 
-                x = np.arange(len(data))
-                y = data
+                    if background_subtraction_mode == 1 and background_data != None:
+                        background = background_data[layer]["local_background"][localisation_number]
+                        data = list(np.array(data) - np.array(background))
+                        data = list(data - np.min(data))
 
-                plot_data = dict(x=x,y=y,
-                                 x_min=x_min,x_max=x_max,
-                                 y_min = np.min(y), y_max = np.max(y),
-                                 layer = layer, break_points = break_points)
+                    if background_subtraction_mode == 2 and background_data != None:
+                        background = background_data[layer]["global_background"]
+                        data = np.array(data) - np.array(background)
+                        data = list(data - np.min(data))
+
+                    x = np.arange(len(data))
+                    y = data
+
+                    plot_data = dict(x=x,y=y,localisation_number=localisation_number,
+                                     x_min=x_min,x_max=x_max,
+                                     y_min = np.min(y), y_max = np.max(y),
+                                     layer = layer, break_points = break_points,
+                                     bounding_box_trace = bounding_box_trace)
+
+                except:
+                    plot_data = None
+                    print(traceback.format_exc())
 
         else:
             plot_data = None
