@@ -682,7 +682,7 @@ class Ui_TabWidget(object):
         TabWidget.addTab(self.tab, "")
 
         self.retranslateUi(TabWidget)
-        TabWidget.setCurrentIndex(3)
+        TabWidget.setCurrentIndex(0)
         self.localisation_channel.setCurrentIndex(1)
         self.image_import_channel.setCurrentIndex(2)
         QtCore.QMetaObject.connectSlotsByName(TabWidget)
