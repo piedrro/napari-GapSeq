@@ -732,6 +732,7 @@ class GapSeqTabWidget(QWidget):
                                     image_trace_layer.append(layer)
 
                             else:
+
                                 if localisation_filter == "None" and nucleotide_filter == nucleotide_class:
                                     append_data = True
                                 elif str(localisation_filter) == str(box_class) and nucleotide_filter == "None":
@@ -749,15 +750,15 @@ class GapSeqTabWidget(QWidget):
                                     image_trace_nucleotide.append(nucleotide_class)
                                     image_trace_layer.append(layer)
 
-                                if self.export_cpd_data.isChecked():
+                                    if self.export_cpd_data.isChecked():
 
-                                    breakpoint_trace = self.generate_cpd_trace(box_data, breakpoints)
+                                        breakpoint_trace = self.generate_cpd_trace(box_data, breakpoints)
 
-                                    image_trace_data.append(breakpoint_trace)
-                                    image_trace_index.append(i)
-                                    image_trace_class.append(box_class)
-                                    image_trace_nucleotide.append(nucleotide_class)
-                                    image_trace_layer.append(layer)
+                                        image_trace_data.append(breakpoint_trace)
+                                        image_trace_index.append(i)
+                                        image_trace_class.append(box_class)
+                                        image_trace_nucleotide.append(nucleotide_class)
+                                        image_trace_layer.append(layer)
 
                     if len(image_trace_data) > 0:
 
