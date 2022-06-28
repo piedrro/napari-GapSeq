@@ -1169,8 +1169,8 @@ class GapSeqTabWidget(QWidget):
                 bounding_box_trace[start:end] = [int(key)] * (end-start)
 
                 meta["bounding_box_traces"][layer][localisation_number] = bounding_box_trace
-                self.box_layer.metadata = meta
 
+                self.box_layer.metadata = meta
                 self.plot_fit_graph()
 
     def manual_break_point_edit(self, event):
