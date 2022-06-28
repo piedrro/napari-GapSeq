@@ -51,6 +51,86 @@ if TYPE_CHECKING:
     import napari
 
 
+
+
+class WorkerSignals(QObject):
+    '''
+    Defines the signals available from a running worker thread.
+
+    Supported signals are:
+
+    finished
+        No data
+
+    error
+        tuple (exctype, value, traceback.format_exc() )
+
+    result
+        object data returned from processing, anything
+
+    progress
+        int indicating % progress
+
+    '''
+    finished = pyqtSignal()
+    error = pyqtSignal(tuple)
+    result = pyqtSignal(object)
+    progress = pyqtSignal(int)
+
+
+class Worker(QRunnable):
+    '''
+    Worker thread
+
+    Inherits from QRunnable to handler worker thread setup, signals and wrap-up.
+
+    :param callback: The function callback to run on this worker thread. Supplied args and
+                     kwargs will be passed through to the runner.
+    :type callback: function
+    :param args: Arguments to pass to the callback function
+    :param kwargs: Keywords to pass to the callback function
+
+    '''
+
+    def __init__(self, fn, *args, **kwargs):
+        super(Worker, self).__init__()
+
+        # Store constructor arguments (re-used for processing)
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
+        self.signals = WorkerSignals()
+
+        # Add the callback to our kwargs
+        self.kwargs['progress_callback'] = self.signals.progress
+
+    @pyqtSlot()
+    def run(self):
+        '''
+        Initialise the runner function with passed args, kwargs.
+        '''
+
+        # Retrieve args/kwargs here; and fire processing using them
+        try:
+            result = self.fn(*self.args, **self.kwargs)
+        except:
+            traceback.print_exc()
+            exctype, value = sys.exc_info()[:2]
+            self.signals.error.emit((exctype, value, traceback.format_exc()))
+        else:
+            self.signals.result.emit(result)  # Return the result of the processing
+        finally:
+            self.signals.finished.emit()  # Done
+
+    def result(self):
+
+        return self.fn(*self.args, **self.kwargs)
+
+
+
+
+
+
 def normalize99(X):
     """ normalize image so 0.0 is 0.01st percentile and 1.0 is 99.99th percentile """
 
@@ -110,7 +190,6 @@ class GapSeqTabWidget(QWidget):
         self.localisation_minimum_distance = self.findChild(QSlider,"localisation_minimum_distance")
         self.localisation_bbox_size_label = self.findChild(QLabel,"localisation_bbox_size_label")
         self.localisation_detect = self.findChild(QPushButton,"localisation_detect")
-        self.load_dev = self.findChild(QPushButton,"load_dev")
         self.plot_compute = self.findChild(QPushButton,"plot_compute")
         self.plot_compute_progress = self.findChild(QProgressBar, "plot_compute_progress")
         self.plot_mode = self.findChild(QComboBox,"plot_mode")
@@ -140,6 +219,7 @@ class GapSeqTabWidget(QWidget):
         self.traces_nucleotide_filter = self.findChild(QComboBox,"traces_nucleotide_filter")
         self.traces_data_selection = self.findChild(QComboBox,"traces_data_selection")
         self.traces_background_mode = self.findChild(QComboBox, "traces_background_mode")
+        self.fit_traces_progress = self.findChild(QProgressBar,"fit_traces_progress")
 
         self.image_import_channel = self.findChild(QComboBox,"image_import_channel")
         self.image_gap_code = self.findChild(QComboBox,"image_gap_code")
@@ -156,6 +236,7 @@ class GapSeqTabWidget(QWidget):
         self.fit_plot_channel = self.findChild(QComboBox, "fit_plot_channel")
         self.fit_cpd_mode = self.findChild(QComboBox,"fit_cpd_mode")
         self.fit_active = self.findChild(QPushButton,"fit_active")
+        self.fit_all = self.findChild(QPushButton,"fit_all")
         self.fit_background_subtraction_mode = self.findChild(QComboBox,"fit_background_subtraction_mode")
 
         self.fit_cpd_model = self.findChild(QComboBox,"fit_cpd_model")
@@ -193,7 +274,6 @@ class GapSeqTabWidget(QWidget):
         self.fit_graph_canvas.figure.patch.set_facecolor("#262930")
         self.fit_graph_container.layout().addWidget(self.fit_graph_canvas)
 
-
         #events
         self.localisation_threshold.valueChanged.connect(lambda: self.update_slider_label("localisation_threshold"))
         self.localisation_area_min.valueChanged.connect(lambda: self.update_slider_label("localisation_area_min"))
@@ -220,8 +300,6 @@ class GapSeqTabWidget(QWidget):
 
         self.import_image.clicked.connect(self.import_image_file)
 
-        self.load_dev.clicked.connect(self.load_dev_files)
-
         self.plot_mode.currentIndexChanged.connect(self.plot_graphs)
         self.plot_localisation_number.valueChanged.connect(self.plot_graphs)
         self.plot_frame_number.valueChanged.connect(self.plot_graphs)
@@ -240,7 +318,7 @@ class GapSeqTabWidget(QWidget):
 
         self.plot_background_subtraction_mode.currentIndexChanged.connect(self.plot_graphs)
 
-        self.plot_compute.clicked.connect(self.compute_plot_data)
+        self.plot_compute.clicked.connect(self.compute_plot_data_mp)
 
         self.gapseq_export_data.clicked.connect(self.export_data)
 
@@ -268,12 +346,16 @@ class GapSeqTabWidget(QWidget):
 
         self.viewer.bind_key(key="d", func=partial(self.keybind_delete_event, key='d'), overwrite=True)
 
-        self.fit_active.clicked.connect(self.change_point_detection)
+        self.fit_active.clicked.connect(partial(self.change_point_detection_mp, detection_mode="active"))
+        self.fit_all.clicked.connect(partial(self.change_point_detection_mp, detection_mode="all"))
+
 
         self.fit_localisation_number.valueChanged.connect(self.plot_fit_graph)
         self.fit_plot_channel.currentIndexChanged.connect(self.plot_fit_graph)
         self.fit_background_subtraction_mode.currentIndexChanged.connect(self.plot_fit_graph)
         self.update_cpd_controls()
+
+        self.threadpool = QThreadPool()
 
         # self.import_gapseq_data(mode="localisations",path=r"C:/napari-gapseq/src/napari_gapseq/dev/devdata.txt")
         # self.change_point_detection()
@@ -900,78 +982,124 @@ class GapSeqTabWidget(QWidget):
 
         return background_image, masked_image
 
-    def compute_plot_data(self):
+
+
+    def compute_plot_data_mp(self):
 
         if "bounding_boxes" in self.viewer.layers:
 
-            image_layers = [layer.name for layer in self.viewer.layers if layer.name not in ["bounding_boxes", "localisation_threshold"]]
+            worker = Worker(self.compute_plot_data)
+            worker.signals.result.connect(self.process_plot_data)
+            worker.signals.progress.connect(partial(self.gapseq_progressbar, progressbar="compute"))
+            self.threadpool.start(worker)
 
-            bounding_boxes = self.box_layer.data.copy()
+    def process_plot_data(self, plot_data):
 
-            shape_type = np.unique(self.box_layer.shape_type)[0]
-            meta = self.box_layer.metadata.copy()
+        meta = self.box_layer.metadata.copy()
 
-            bounding_box_centres = meta["bounding_box_centres"]
-            bounding_box_class = meta["bounding_box_class"]
-            bounding_box_size = meta["bounding_box_size"]
-            layer_image_shape = {}
-            bounding_box_data = {}
-            bounding_box_breakpoints = {}
-            bounding_box_traces = {}
-            background_data = {}
+        meta["bounding_box_data"] = plot_data["bounding_box_data"]
+        meta["layer_image_shape"] = plot_data["layer_image_shape"]
+        meta["image_layers"] = plot_data["image_layers"]
+        meta["background_data"] = plot_data["background_data"]
+        meta["bounding_box_breakpoints"] = plot_data["bounding_box_breakpoints"]
+        meta["bounding_box_traces"] = plot_data["bounding_box_traces"]
 
-            for i in range(len(image_layers)):
+        self.box_layer.metadata = meta
 
-                image = self.viewer.layers[image_layers[i]].data
-                layer = image_layers[i]
-                bounding_box_data[layer] = []
-                bounding_box_breakpoints[layer] = []
-                bounding_box_traces[layer] = []
-                layer_image_shape[layer] = image.shape
+        self.plot_graphs()
+        self.plot_fit_graph()
 
-                background_image, masked_image = self.get_background_mask(bounding_boxes, bounding_box_size, bounding_box_centres, image)
 
-                background_data[layer]= {"global_background": np.mean(background_image,axis=(1, 2)).tolist(),
-                                         "local_background": []}
+    def compute_plot_data(self, progress_callback):
 
-                for j in range(len(bounding_boxes)):
+        image_layers = [layer.name for layer in self.viewer.layers if
+                        layer.name not in ["bounding_boxes", "localisation_threshold"]]
+        bounding_boxes = self.box_layer.data.copy()
+        meta = self.box_layer.metadata.copy()
 
-                    progress = int(( ((i + 1) * (j +1)) / len(bounding_boxes) * len(image_layers)) * 100)
+        bounding_box_centres = meta["bounding_box_centres"]
+        bounding_box_class = meta["bounding_box_class"]
+        bounding_box_size = meta["bounding_box_size"]
+        layer_image_shape = {}
+        bounding_box_data = {}
+        bounding_box_breakpoints = {}
+        bounding_box_traces = {}
+        background_data = {}
 
-                    polygon = bounding_boxes[j]
-                    [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = polygon
-                    cx,cy = bounding_box_centres[j]
-                    box_class = bounding_box_class[j]
-                    box_size = bounding_box_size
-                    background_box_size = 20
+        num_iter = len(image_layers)*len(bounding_boxes)
+        iter_count = 0
 
-                    data = image[:, int(y1):int(y2), int(x1):int(x2)]
-                    data = np.nanmean(data, axis=(1, 2)).tolist()
+        for i in range(len(image_layers)):
 
-                    [[y1,x1],[y2,x2]] = [[cy - background_box_size, cx - background_box_size],
-                                         [cy + background_box_size, cx + background_box_size]]
-                    local_background_data = background_image[:, int(y1):int(y2), int(x1):int(x2)].copy()
-                    local_background_data = np.mean(local_background_data, axis=(1, 2)).tolist()
+            try:
 
-                    bounding_box_data[layer].append(data)
-                    bounding_box_breakpoints[layer].append([])
-                    bounding_box_traces[layer].append([0]*len(data))
-                    background_data[layer]["local_background"].append(local_background_data)
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-                    self.plot_compute_progress.setValue(progress)
+                    image = self.viewer.layers[image_layers[i]].data
+                    layer = image_layers[i]
+                    bounding_box_data[layer] = []
+                    bounding_box_breakpoints[layer] = []
+                    bounding_box_traces[layer] = []
+                    layer_image_shape[layer] = image.shape
 
-            meta["bounding_box_data"] = bounding_box_data
-            meta["layer_image_shape"] = layer_image_shape
-            meta["image_layers"] = image_layers
-            meta["background_data"] = background_data
-            meta["bounding_box_breakpoints"] = bounding_box_breakpoints
-            meta["bounding_box_traces"] = bounding_box_traces
+                    background_image, masked_image = self.get_background_mask(bounding_boxes, bounding_box_size, bounding_box_centres, image)
 
-            self.box_layer.metadata = meta
+                    background_data[layer]= {"global_background": np.mean(background_image,axis=(1, 2)).tolist(),
+                                             "local_background": []}
+
+                    for j in range(len(bounding_boxes)):
+
+                        iter_count += 1
+
+                        progress = int(iter_count/num_iter * 100)
+                        progress_callback.emit(progress)
+
+                        polygon = bounding_boxes[j]
+                        [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = polygon
+                        cx,cy = bounding_box_centres[j]
+                        box_class = bounding_box_class[j]
+                        box_size = bounding_box_size
+                        background_box_size = 20
+
+                        data = image[:, int(y1):int(y2), int(x1):int(x2)]
+                        data = np.nanmean(data, axis=(1, 2)).tolist()
+
+                        [[y1,x1],[y2,x2]] = [[cy - background_box_size, cx - background_box_size],
+                                             [cy + background_box_size, cx + background_box_size]]
+                        local_background_data = background_image[:, int(y1):int(y2), int(x1):int(x2)].copy()
+                        local_background_data = np.mean(local_background_data, axis=(1, 2)).tolist()
+
+                        bounding_box_data[layer].append(data)
+                        bounding_box_breakpoints[layer].append([])
+                        bounding_box_traces[layer].append([0]*len(data))
+                        background_data[layer]["local_background"].append(local_background_data)
+
+            except:
+                pass
+
+        compute_data = dict(bounding_box_data=bounding_box_data,
+                            layer_image_shape=layer_image_shape,
+                            image_layers=image_layers,
+                            background_data=background_data,
+                            bounding_box_breakpoints=bounding_box_breakpoints,
+                            bounding_box_traces=bounding_box_traces)
+
+
+        return compute_data
+
+
+    def gapseq_progressbar(self, progress, progressbar):
+
+        if progressbar == "compute":
+            self.plot_compute_progress.setValue(progress)
+        if progressbar == "fit_traces":
+            self.fit_traces_progress.setValue(progress)
+
+        if progress == 100:
+            time.sleep(1)
             self.plot_compute_progress.setValue(0)
-
-            self.plot_graphs()
-            self.plot_fit_graph()
+            self.fit_traces_progress.setValue(0)
 
     def filter_localisations(self):
 
@@ -1015,46 +1143,6 @@ class GapSeqTabWidget(QWidget):
         self.box_layer.metadata["nucleotide_class"][localisation_number] = str(new_class)
 
         self.plot_graphs()
-
-    def load_dev_files(self):
-
-        self.import_localisation_image()
-        self.threshold_image()
-        self.detect_localisations()
-
-        path = r"C:/napari-gapseq/src/napari_gapseq/dev/20220527_27thMay2022GAP36A/27thMay2022GAPSeq4onebyonesubstrategAPGS8FRETfoursea25nM_GAPSeqonebyoneGS83TL638Exp200.tif"
-
-        gap_codes = ["A","T","C","G"]
-        seq_code = "A"
-        crop_mode = self.image_import_channel.currentIndex()
-
-        for i in range(1):
-
-            index = len(path) - 15
-            path = path[:index] + gap_codes[i] + path[index + 1:]
-
-            gap_code = gap_codes[i]
-            self.image_gap_code.setCurrentText(gap_code)
-
-            image, meta = self.read_image_file(path, crop_mode)
-
-            meta["gap_code"] = gap_code
-            meta["seq_code"] = seq_code
-
-            layer_name = f"GAP-{gap_code}:SEQ-{seq_code}"
-
-            if layer_name in self.viewer.layers:
-
-                self.viewer.layers[layer_name].data = image
-                self.viewer.layers[layer_name].metadata = meta
-
-            else:
-
-                setattr(self, layer_name, self.viewer.add_image(image, name=layer_name, metadata=meta))
-                self.viewer.layers[layer_name].mouse_drag_callbacks.append(self.localisation_click_events)
-
-        self.sort_layer_order()
-        self.compute_plot_data()
 
     def manual_state_edit(self, event):
 
@@ -1142,57 +1230,88 @@ class GapSeqTabWidget(QWidget):
                         self.box_layer.metadata = meta
                         self.plot_fit_graph(xlim=xlim,ylim=ylim)
 
-    def change_point_detection(self, localisation_number = None):
+    def change_point_detection_mp(self,detection_mode):
+
+        if "bounding_boxes" in self.viewer.layers:
+
+            worker = Worker(partial(self.change_point_detection, detection_mode=detection_mode))
+            worker.signals.progress.connect(partial(self.gapseq_progressbar, progressbar="fit_traces"))
+            self.threadpool.start(worker)
+
+    def change_point_detection(self, progress_callback, detection_mode):
 
         if "bounding_boxes" in self.viewer.layers:
 
             if "bounding_box_data" in self.box_layer.metadata.keys():
 
-                data = self.get_fit_graph_data()
+                bounding_boxes = self.box_layer.data.copy()
                 meta = self.box_layer.metadata.copy()
                 mode = self.fit_cpd_mode.currentIndex()
                 hmm_states = self.fit_hmm_states.value()
 
-                if type(localisation_number) != int:
-                    localisation_number = self.fit_localisation_number.value()
+                if detection_mode == "active":
+                    localisation_list = [self.fit_localisation_number.value()]
+                    layer_list = [self.fit_plot_channel.currentText()]
+                else:
+                    localisation_list = np.arange((len(bounding_boxes)))
+                    layer_list = [layer.name for layer in self.viewer.layers if layer.name not in ["bounding_boxes", "localisation_threshold"]]
 
-                if data != None:
+                num_iter = len(layer_list) * len(localisation_list)
+                iter_count = 0
 
-                    points = np.array(data["y"])
+                for layer in layer_list:
 
-                    model = self.fit_cpd_model.currentText()
-                    pen = self.fit_cpd_penalty.value()
-                    width = self.fit_cpd_window_size.value()
-                    min_size = self.fit_cpd_min_size.value()
-                    jump = self.fit_cpd_jump.value()
-                    n_bkps = self.fit_cpd_breakpoints.value()
+                    for i in range(len(localisation_list)):
 
-                    if mode == 0:
-                        bounding_box_trace, breakpoints = self.fit_hmm(points,hmm_states)
-                    if mode == 1:
-                        algo = rpt.Pelt(model=model, jump=jump).fit(points)
-                        breakpoints = algo.predict(pen=pen)
-                    if mode == 2:
-                        algo = rpt.Binseg(model=model,min_size=min_size, jump=jump).fit(points)
-                        breakpoints =algo.predict(n_bkps=n_bkps, pen=pen)
-                    if mode == 3:
-                        algo = rpt.Window(width=width, model=model, jump=jump).fit(points)
-                        breakpoints = algo.predict(n_bkps=n_bkps, pen=pen)
-                    if mode == 4:
-                        algo = rpt.BottomUp(model=model, jump=jump, min_size=min_size).fit(points)
-                        breakpoints = algo.predict(n_bkps=n_bkps, pen=pen)
-                    if mode == 5:
-                        algo = rpt.Dynp(model=model, min_size=min_size, jump=jump).fit(points)
-                        breakpoints = algo.predict(n_bkps=n_bkps)
+                        iter_count += 1
+                        progress = int((iter_count/num_iter)*100)
+                        progress_callback.emit(progress)
 
-                    if mode != 0:
-                        bounding_box_trace = self.generate_cpd_trace(points, breakpoints, mode = "hmm", n_components = hmm_states)
+                        try:
 
-                    meta["bounding_box_breakpoints"][data["layer"]][localisation_number] = breakpoints
-                    meta["bounding_box_traces"][data["layer"]][localisation_number] = bounding_box_trace
+                            data = self.get_fit_graph_data(localisation_number=i, layer=layer)
 
-                    self.box_layer.metadata = meta
-                    self.plot_fit_graph()
+                            if data != None:
+
+                                points = np.array(data["y"])
+
+                                model = self.fit_cpd_model.currentText()
+                                pen = self.fit_cpd_penalty.value()
+                                width = self.fit_cpd_window_size.value()
+                                min_size = self.fit_cpd_min_size.value()
+                                jump = self.fit_cpd_jump.value()
+                                n_bkps = self.fit_cpd_breakpoints.value()
+
+                                if mode == 0:
+                                    bounding_box_trace, breakpoints = self.fit_hmm(points,hmm_states)
+                                if mode == 1:
+                                    algo = rpt.Pelt(model=model, jump=jump).fit(points)
+                                    breakpoints = algo.predict(pen=pen)
+                                if mode == 2:
+                                    algo = rpt.Binseg(model=model,min_size=min_size, jump=jump).fit(points)
+                                    breakpoints =algo.predict(n_bkps=n_bkps, pen=pen)
+                                if mode == 3:
+                                    algo = rpt.Window(width=width, model=model, jump=jump).fit(points)
+                                    breakpoints = algo.predict(n_bkps=n_bkps, pen=pen)
+                                if mode == 4:
+                                    algo = rpt.BottomUp(model=model, jump=jump, min_size=min_size).fit(points)
+                                    breakpoints = algo.predict(n_bkps=n_bkps, pen=pen)
+                                if mode == 5:
+                                    algo = rpt.Dynp(model=model, min_size=min_size, jump=jump).fit(points)
+                                    breakpoints = algo.predict(n_bkps=n_bkps)
+
+                                if mode != 0:
+                                    bounding_box_trace = self.generate_cpd_trace(points, breakpoints, mode = "hmm", n_components = hmm_states)
+
+                                meta["bounding_box_breakpoints"][data["layer"]][i] = breakpoints
+                                meta["bounding_box_traces"][data["layer"]][i] = bounding_box_trace
+
+                        except:
+                            pass
+
+                self.box_layer.metadata = meta
+                self.plot_fit_graph()
+
 
     def plot_fit_graph(self, plot_data = None, xlim = None, ylim = None):
 
@@ -1314,8 +1433,12 @@ class GapSeqTabWidget(QWidget):
 
                     layers = ["localisation_image"]
 
-                    maximum_height = 300 * len(layers)
-                    self.graph_container.setMaximumHeight(maximum_height)
+
+                    self.akseg_maxmimum_height = int(self.akseg_ui.frameGeometry().height()*0.6)
+                    maximum_height = 400 * len(layers)
+                    if maximum_height > self.akseg_maxmimum_height:
+                        maximum_height = self.akseg_maxmimum_height
+                    self.graph_container.setMinimumHeight(maximum_height)
 
                     bounding_box_data = self.box_layer.metadata["bounding_box_data"]
                     layer_image_shape = self.box_layer.metadata["layer_image_shape"]
@@ -1334,8 +1457,11 @@ class GapSeqTabWidget(QWidget):
 
                     layers = [layer for layer in image_layers if layer not in ["localisation_image", "localisation_threshold", "bounding_boxes"]]
 
-                    maximum_height = 300 * len(layers)
-                    self.graph_container.setMaximumHeight(maximum_height)
+                    self.akseg_maxmimum_height = int(self.akseg_ui.frameGeometry().height()*0.6)
+                    maximum_height = 400 * len(layers)
+                    if maximum_height > self.akseg_maxmimum_height:
+                        maximum_height = self.akseg_maxmimum_height
+                    self.graph_container.setMinimumHeight(maximum_height)
 
                     if len(layers) > 0:
 
@@ -1356,8 +1482,11 @@ class GapSeqTabWidget(QWidget):
 
                     layers = [layer for layer in image_layers if layer not in ["bounding_boxes", "localisation_threshold"]]
 
-                    maximum_height = 300 * len(layers)
-                    self.graph_container.setMaximumHeight(maximum_height)
+                    self.akseg_maxmimum_height = int(self.akseg_ui.frameGeometry().height()*0.6)
+                    maximum_height = 400 * len(layers)
+                    if maximum_height > self.akseg_maxmimum_height:
+                        maximum_height = self.akseg_maxmimum_height
+                    self.graph_container.setMinimumHeight(maximum_height)
 
                     if len(layers) > 0:
 
@@ -2051,7 +2180,7 @@ class GapSeqTabWidget(QWidget):
                 self.viewer.layers[layer_name].mouse_drag_callbacks.append(self.localisation_click_events)
 
             self.sort_layer_order()
-            self.fit_plot_channel.addItems(layer_name)
+            self.fit_plot_channel.addItem(layer_name)
 
     def sort_layer_order(self):
 
