@@ -982,8 +982,6 @@ class GapSeqTabWidget(QWidget):
 
         return background_image, masked_image
 
-
-
     def compute_plot_data_mp(self):
 
         if "bounding_boxes" in self.viewer.layers:
@@ -1008,7 +1006,6 @@ class GapSeqTabWidget(QWidget):
 
         self.plot_graphs()
         self.plot_fit_graph()
-
 
     def compute_plot_data(self, progress_callback):
 
@@ -1087,7 +1084,6 @@ class GapSeqTabWidget(QWidget):
 
 
         return compute_data
-
 
     def gapseq_progressbar(self, progress, progressbar):
 
@@ -1204,6 +1200,7 @@ class GapSeqTabWidget(QWidget):
                 break_points.append(frame_int)
 
                 bounding_box_trace = self.generate_cpd_trace(data,break_points,mode="hmm",n_components=hmm_states)
+
                 meta["bounding_box_breakpoints"][layer][localisation_number] = break_points
                 meta["bounding_box_traces"][layer][localisation_number] = bounding_box_trace
 
@@ -1311,7 +1308,6 @@ class GapSeqTabWidget(QWidget):
 
                 self.box_layer.metadata = meta
                 self.plot_fit_graph()
-
 
     def plot_fit_graph(self, plot_data = None, xlim = None, ylim = None):
 

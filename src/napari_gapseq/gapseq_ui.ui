@@ -14,7 +14,7 @@
    <string>TabWidget</string>
   </property>
   <property name="currentIndex">
-   <number>3</number>
+   <number>0</number>
   </property>
   <widget class="QWidget" name="tab_localisations">
    <attribute name="title">
@@ -1766,20 +1766,6 @@
        </size>
       </property>
      </spacer>
-    </item>
-   </layout>
-  </widget>
-  <widget class="QWidget" name="tab">
-   <attribute name="title">
-    <string>DEV</string>
-   </attribute>
-   <layout class="QVBoxLayout" name="verticalLayout">
-    <item>
-     <widget class="QPushButton" name="load_dev">
-      <property name="text">
-       <string>load DEV files</string>
-      </property>
-     </widget>
     </item>
    </layout>
   </widget>
