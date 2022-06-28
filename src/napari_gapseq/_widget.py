@@ -732,12 +732,11 @@ class GapSeqTabWidget(QWidget):
                                     image_trace_layer.append(layer)
 
                             else:
-
                                 if localisation_filter == "None" and nucleotide_filter == nucleotide_class:
                                     append_data = True
-                                elif localisation_filter == str(box_class) and nucleotide_filter == "None":
+                                elif str(localisation_filter) == str(box_class) and nucleotide_filter == "None":
                                     append_data = True
-                                elif localisation_filter == str(box_class) and nucleotide_filter == nucleotide_class:
+                                elif str(localisation_filter) == str(box_class) and nucleotide_filter == nucleotide_class:
                                     append_data = True
                                 else:
                                     append_data = False
@@ -988,10 +987,12 @@ class GapSeqTabWidget(QWidget):
 
         if "bounding_boxes" in self.viewer.layers:
 
-            worker = Worker(self.compute_plot_data)
-            worker.signals.result.connect(self.process_plot_data)
-            worker.signals.progress.connect(partial(self.gapseq_progressbar, progressbar="compute"))
-            self.threadpool.start(worker)
+            if len(self.box_layer.data) > 1:
+
+                worker = Worker(self.compute_plot_data)
+                worker.signals.result.connect(self.process_plot_data)
+                worker.signals.progress.connect(partial(self.gapseq_progressbar, progressbar="compute"))
+                self.threadpool.start(worker)
 
     def process_plot_data(self, plot_data):
 
