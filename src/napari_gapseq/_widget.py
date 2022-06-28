@@ -1203,9 +1203,6 @@ class GapSeqTabWidget(QWidget):
 
                 bounding_box_trace = self.generate_cpd_trace(data,break_points,mode="hmm",n_components=hmm_states)
 
-                print(len(data))
-                print(len(bounding_box_trace))
-
                 meta["bounding_box_breakpoints"][layer][localisation_number] = break_points
                 meta["bounding_box_traces"][layer][localisation_number] = bounding_box_trace
 
