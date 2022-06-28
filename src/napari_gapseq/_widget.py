@@ -220,6 +220,7 @@ class GapSeqTabWidget(QWidget):
         self.traces_data_selection = self.findChild(QComboBox,"traces_data_selection")
         self.traces_background_mode = self.findChild(QComboBox, "traces_background_mode")
         self.fit_traces_progress = self.findChild(QProgressBar,"fit_traces_progress")
+        self.export_progress = self.findChild(QProgressBar,"export_progress")
 
         self.image_import_channel = self.findChild(QComboBox,"image_import_channel")
         self.image_gap_code = self.findChild(QComboBox,"image_gap_code")
@@ -325,8 +326,8 @@ class GapSeqTabWidget(QWidget):
         self.gapseq_import_localisations.clicked.connect(partial(self.import_gapseq_data, mode = 'localisations'))
         self.gapseq_import_all.clicked.connect(partial(self.import_gapseq_data, mode='all'))
 
-        self.gapseq_export_traces_excel.clicked.connect(partial(self.export_traces, mode = "excel"))
-        self.gapseq_export_traces_dat.clicked.connect(partial(self.export_traces, mode="dat"))
+        self.gapseq_export_traces_excel.clicked.connect(partial(self.threaded_export_traces, mode = "excel"))
+        self.gapseq_export_traces_dat.clicked.connect(partial(self.threaded_export_traces, mode="dat"))
 
         self.viewer.bind_key(key="Alt-1", func=partial(self.keybind_classify_class, key=0), overwrite=True)
         self.viewer.bind_key(key="Alt-1", func=partial(self.keybind_classify_class, key=1), overwrite=True)
@@ -638,7 +639,18 @@ class GapSeqTabWidget(QWidget):
 
         return breakpoint_trace
 
-    def export_traces(self, mode = "excel"):
+
+    def threaded_export_traces(self, mode="excel"):
+
+        if "bounding_boxes" in self.viewer.layers:
+
+            if len(self.box_layer.data) > 1:
+
+                worker = Worker(partial(self.export_traces,mode=mode))
+                worker.signals.progress.connect(partial(self.gapseq_progressbar, progressbar="export"))
+                self.threadpool.start(worker)
+
+    def export_traces(self, progress_callback, mode = "excel"):
 
         if "bounding_boxes" in self.viewer.layers:
 
@@ -693,9 +705,18 @@ class GapSeqTabWidget(QWidget):
                     image_trace_nucleotide = []
                     image_trace_data = []
 
+                    num_iter = len(layers) * int(box_num)
+                    iter_count = 0
+
                     for i in range(box_num):
 
-                        for layer in layers:
+                        for j in range(len(layers)):
+
+                            iter_count += 1
+                            progress = int(iter_count / num_iter * 100)
+                            progress_callback.emit(progress)
+
+                            layer = layers[j]
 
                             box_data = bounding_box_data[layer][i]
                             box_class = bounding_box_class[i]
@@ -1095,11 +1116,18 @@ class GapSeqTabWidget(QWidget):
             self.plot_compute_progress.setValue(progress)
         if progressbar == "fit_traces":
             self.fit_traces_progress.setValue(progress)
+        if progressbar == "export":
+            self.export_progress.setValue(progress)
 
         if progress == 100:
             time.sleep(1)
+            self.plot_compute_progress.setValue(100)
+            self.fit_traces_progress.setValue(100)
+            self.export_progress.setValue(100)
+            time.sleep(1)
             self.plot_compute_progress.setValue(0)
             self.fit_traces_progress.setValue(0)
+            self.export_progress.setValue(0)
 
     def filter_localisations(self):
 
