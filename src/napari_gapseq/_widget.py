@@ -611,6 +611,8 @@ class GapSeqTabWidget(QWidget):
 
             if 0 not in breakpoints:
                 breakpoints.insert(0,0)
+            if len(x) not in breakpoints:
+                breakpoints.append(len(x))
 
             breakpoint_trace = []
 
@@ -1200,6 +1202,9 @@ class GapSeqTabWidget(QWidget):
                 break_points.append(frame_int)
 
                 bounding_box_trace = self.generate_cpd_trace(data,break_points,mode="hmm",n_components=hmm_states)
+
+                print(len(data))
+                print(len(bounding_box_trace))
 
                 meta["bounding_box_breakpoints"][layer][localisation_number] = break_points
                 meta["bounding_box_traces"][layer][localisation_number] = bounding_box_trace
