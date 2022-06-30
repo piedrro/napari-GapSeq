@@ -39,7 +39,7 @@ from scipy import optimize
 import warnings
 from scipy.spatial import distance
 import ruptures as rpt
-
+import scipy
 plt.style.use('dark_background')
 
 from typing import TYPE_CHECKING
@@ -159,6 +159,223 @@ def find_contours(img):
     return contours
 
 
+
+
+def gaussian(height, center_x, center_y, width_x, width_y):
+
+    """Returns a gaussian function with the given parameters"""
+
+    width_x = float(width_x)
+    width_y = float(width_y)
+
+    return lambda x, y: height * np.exp(
+        -(((center_x - x) / width_x) ** 2 + ((center_y - y) / width_y) ** 2) / 2)
+
+def moments(data):
+
+    """Returns (height, x, y, width_x, width_y)
+    the gaussian parameters of a 2D distribution by calculating its
+    moments """
+
+    total = data.sum()
+    X, Y = np.indices(data.shape)
+    x = (X * data).sum() / total
+    y = (Y * data).sum() / total
+
+    col = data[:, int(y)]
+    width_x = np.sqrt(np.abs((np.arange(col.size) - x) ** 2 * col).sum() / col.sum())
+
+    row = data[int(x), :]
+    width_y = np.sqrt(np.abs((np.arange(row.size) - y) ** 2 * row).sum() / row.sum())
+
+    height = data.max()
+
+    return height, x, y, width_x, width_y
+
+def fitgaussian(data, params = []):
+
+    """Returns (height, x, y, width_x, width_y)
+    the gaussian parameters of a 2D distribution found by a fit"""
+
+    if len(params) == 0:
+        params = moments(data)
+
+    errorfunction = lambda p: np.ravel(gaussian(*p)(*np.indices(data.shape)) - data)
+    p, success = optimize.leastsq(errorfunction, params)
+
+    return p
+
+
+
+
+
+def crop_image(img, crop_mode=0):
+
+    if crop_mode != 0:
+
+        if len(img.shape) > 2:
+            imgL = img[:, :, :img.shape[-1] // 2]
+            imgR = img[:, :, img.shape[-1] // 2:]
+        else:
+            imgL = img[:, :img.shape[-1] // 2]
+            imgR = img[:, img.shape[-1] // 2:]
+
+        if crop_mode == 1:
+            img = imgL
+        if crop_mode == 2:
+            img = imgR
+
+        if crop_mode == 3:
+            if np.mean(imgL) > np.mean(imgR):
+                img = imgL
+            else:
+                img = imgR
+    return img
+
+def stack_image(image, stack_mode):
+
+    if stack_mode == 0:
+
+        image = np.mean(image,axis=0)
+
+    if stack_mode == 1:
+
+        image = np.max(image,axis=0)
+
+    if stack_mode == 2:
+
+        image = np.std(image,axis=0)
+
+    return image
+
+def compute_undrift_localisations(image, box_centres, loc0_data=None, box_size=5):
+
+    if loc0_data != None:
+        loc0_centers = loc0_data["loc_centers"]
+        param_list = loc0_data["loc_params"]
+    else:
+        loc0_centers = box_centres
+        param_list = [[]] * len(box_centres)
+
+    loc_bboxs = []
+    loc_centers = []
+    loc_params = []
+
+    for i in range(len(loc0_centers)):
+
+        try:
+
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+                loc = loc0_centers[i]
+                params = param_list[i]
+
+                cx, cy = loc
+
+                x1, x2 = cx - box_size, cx + box_size
+                y1, y2 = cy - box_size, cy + box_size
+
+                img = image[int(y1):int(y2), int(x1):int(x2)]
+
+                params = fitgaussian(img, params)
+
+                cy = cy + 1 - box_size + params[1]
+                cx = cx + 1 - box_size + params[2]
+
+                x1, x2 = cx - box_size, cx + box_size
+                y1, y2 = cy - box_size, cy + box_size
+
+                loc_bboxs.append([x1, x2, y1, y2])
+                loc_centers.append([cx, cy])
+                loc_params.append(params)
+
+        except:
+            pass
+
+    return loc_bboxs,loc_centers,loc_params
+
+
+def load_undrift_segment(index_list, path, crop_mode,stack_mode, box_centres, loc0_data=None):
+
+    with tifffile.TiffFile(path) as tif:
+
+        img = [page.asarray() for index, page in enumerate(tif.pages) if index in index_list]
+
+        img = np.array(img)
+        img = crop_image(img,crop_mode)
+        img = stack_image(img,stack_mode)
+
+        loc_bboxs, loc_centers, loc_params = compute_undrift_localisations(img, box_centres, loc0_data)
+
+        loc_data = dict(index_list = index_list, loc_bboxs=loc_bboxs,loc_centers=loc_centers,loc_params=loc_params)
+
+    return loc_data
+
+
+def process_loc_data(loc_data, n_frames):
+    loc0_centres = np.array(loc_data.pop(0)["loc_centers"])
+
+    drift = [[0, 0]]
+    index = [0]
+
+    for i in range(len(loc_data)):
+
+        loc_centres = np.array(loc_data[i]["loc_centers"])
+
+        distances = distance.cdist(loc0_centres, loc_centres)
+
+        distances[distances == 0] = np.nan
+        distances[distances > 3] = np.nan
+
+        x_drift = []
+        y_drift = []
+
+        for j in range(distances.shape[0]):
+
+            dat = distances[j]
+
+            try:
+                loc_index = np.nanargmin(dat)
+                loc0_index = j
+
+                loc_centre = loc_centres[loc_index]
+                loc0_centre = loc0_centres[loc0_index]
+
+                difference = loc0_centre - loc_centre
+
+                x_drift.append(loc0_centre[0] - loc_centre[0])
+                y_drift.append(loc0_centre[1] - loc_centre[1])
+                index.append()
+
+            except:
+                pass
+
+        drift.append([np.mean(x_drift), np.mean(y_drift)])
+        index.append(np.array(loc_data[i]["index_list"])[0])
+
+    shift_y = np.array(drift)[:, 0]
+    shift_x = np.array(drift)[:, 1]
+
+    shift_y = np.interp(np.arange(n_frames), index, shift_y)
+    shift_x = np.interp(np.arange(n_frames), index, shift_x)
+
+    drift = np.stack((shift_x, shift_y)).T
+
+    return drift
+
+
+def undrift_image(index, path, drift):
+
+    with tifffile.TiffFile(path) as tif:
+        img = np.array(tif.pages[index].asarray())
+
+        img = scipy.ndimage.shift(img, drift[index])
+
+        return [index, img]
+
+
+
 class GapSeqTabWidget(QWidget):
 
     def __init__(self, viewer: napari.Viewer):
@@ -191,6 +408,9 @@ class GapSeqTabWidget(QWidget):
         self.localisation_minimum_distance = self.findChild(QSlider,"localisation_minimum_distance")
         self.localisation_bbox_size_label = self.findChild(QLabel,"localisation_bbox_size_label")
         self.localisation_detect = self.findChild(QPushButton,"localisation_detect")
+        self.localisation_undrift = self.findChild(QPushButton,"localisation_undrift")
+        self.undrift_progress = self.findChild(QProgressBar,"undrift_progress")
+        self.localisation_frame_averaging = self.findChild(QComboBox,"localisation_frame_averaging")
         self.plot_compute = self.findChild(QPushButton,"plot_compute")
         self.plot_compute_progress = self.findChild(QProgressBar, "plot_compute_progress")
         self.plot_mode = self.findChild(QComboBox,"plot_mode")
@@ -324,6 +544,8 @@ class GapSeqTabWidget(QWidget):
 
         self.gapseq_export_data.clicked.connect(self.export_data)
 
+        self.localisation_undrift.clicked.connect(self.initialise_gapseq_undrift)
+
         self.gapseq_import_localisations.clicked.connect(partial(self.import_gapseq_data, mode = 'localisations'))
         self.gapseq_import_all.clicked.connect(partial(self.import_gapseq_data, mode='all'))
 
@@ -359,8 +581,82 @@ class GapSeqTabWidget(QWidget):
 
         self.threadpool = QThreadPool()
 
-        # self.import_gapseq_data(mode="localisations",path=r"C:/napari-gapseq/src/napari_gapseq/dev/devdata.txt")
+        # self.import_gapseq_data(mode="all",path=r"C:/napari-gapseq/src/napari_gapseq/dev/devdata.txt")
         # self.change_point_detection()
+
+        # self.import_localisation_image()
+        # self.detect_localisations()
+
+    def process_gapseq_undrift(self, image):
+
+        self.viewer.layers["localisation_image"].data = image
+        self.undrift_progress.setValue(0)
+
+    def initialise_gapseq_undrift(self):
+
+        worker = Worker(self.gapseq_undrift)
+        worker.signals.result.connect(self.process_gapseq_undrift)
+        worker.signals.progress.connect(partial(self.gapseq_progressbar, progressbar="undrift"))
+        self.threadpool.start(worker)
+
+    def gapseq_undrift(self, progress_callback):
+
+        n_frame_average = int(self.localisation_frame_averaging.currentText())
+        meta = self.box_layer.metadata
+        box_centres = meta["bounding_box_centres"]
+        crop_mode = self.localisation_channel.currentIndex()
+        stack_mode = self.localisation_stack_mode.currentIndex()
+        path = self.viewer.layers["localisation_image"].metadata["image_path"]
+        loc_data = []
+
+        tif = tifffile.TiffFile(path)
+
+        n_frames = len(tif.pages)
+        n_segments = n_frames//n_frame_average
+        image_index = np.split(np.arange(n_frames),n_segments)
+
+        loc0_data = load_undrift_segment(image_index[0], path=path, box_centres=box_centres, crop_mode = crop_mode, stack_mode = stack_mode)
+
+        from multiprocessing import Pool
+
+        with Pool() as p:
+
+            def callback(*args):
+                iter.append(1)
+                progress = (len(iter) / n_segments) * 100
+
+                if progress_callback != None:
+                    progress_callback.emit(progress)
+
+                return
+
+            iter = []
+            results = [p.apply_async(load_undrift_segment, args=(i,), kwds={'path': path,
+                                                                            'box_centres': box_centres,
+                                                                            'loc0_data': loc0_data,
+                                                                            'crop_mode': crop_mode,
+                                                                            'stack_mode': stack_mode}, callback=callback) for i in image_index]
+
+            loc_data = [r.get() for r in results]
+
+            drift = process_loc_data(loc_data, n_frames)
+
+            index_list = np.arange(n_frames)
+            iter = []
+            images = [p.apply_async(undrift_image, args=(i,), kwds={'path': path,
+                                                                     'drift': drift}, callback=callback) for i in index_list]
+
+            images = [r.get() for r in images]
+
+            index_list, images = zip(*images)
+            index_list, images = zip(*sorted(zip(index_list, images), key=lambda x: x[0]))
+            images = np.stack(images, axis=0)
+
+            p.close()
+            p.join()
+
+        return images
+
 
 
     def update_cpd_controls(self):
@@ -1118,16 +1414,20 @@ class GapSeqTabWidget(QWidget):
             self.fit_traces_progress.setValue(progress)
         if progressbar == "export":
             self.export_progress.setValue(progress)
+        if progressbar == "undrift":
+            self.undrift_progress.setValue(progress)
 
         if progress == 100:
             time.sleep(1)
             self.plot_compute_progress.setValue(100)
             self.fit_traces_progress.setValue(100)
             self.export_progress.setValue(100)
+            self.undrift_progress.setValue(100)
             time.sleep(1)
             self.plot_compute_progress.setValue(0)
             self.fit_traces_progress.setValue(0)
             self.export_progress.setValue(0)
+            self.undrift_progress.setValue(100)
 
     def filter_localisations(self):
 
@@ -2067,12 +2367,14 @@ class GapSeqTabWidget(QWidget):
 
         return height, x, y, width_x, width_y
 
-    def fitgaussian(self, data):
+    def fitgaussian(self, data, params = []):
 
         """Returns (height, x, y, width_x, width_y)
         the gaussian parameters of a 2D distribution found by a fit"""
 
-        params = self.moments(data)
+        if len(params) == 0:
+            params = self.moments(data)
+
         errorfunction = lambda p: np.ravel(self.gaussian(*p)(*np.indices(data.shape)) - data)
         p, success = optimize.leastsq(errorfunction, params)
 
@@ -2099,9 +2401,10 @@ class GapSeqTabWidget(QWidget):
 
     def import_localisation_image(self, meta = [], import_gapseq = False):
 
-        path = r"C:/napari-gapseq/src/napari_gapseq/dev/20220527_27thMay2022GAP36A/27thMay2022GAPSeq4onebyonesubstrategAPGS8FRETfoursea50nMconce2_GAPSeqonebyoneGAP36AL532Exp200.tif"
-        # path = r"C:/napari-gapseq/src/napari_gapseq/dev/20220527_27thMay2022GAP36A/27thMay2022GAPSeq4onebyonesubstrategAPGS8FRETfoursea50nMconce2_GAPSeqonebyoneGAP36AL532Exp200_locImage.tiff"
-
+        # path = r"C:/napari-gapseq/src/napari_gapseq/dev/20220527_27thMay2022GAP36A/27thMay2022GAPSeq4onebyonesubstrategAPGS8FRETfoursea50nMconce2_GAPSeqonebyoneGAP36AL532Exp200.tif"
+        # # path = r"C:/napari-gapseq/src/napari_gapseq/dev/20220527_27thMay2022GAP36A/27thMay2022GAPSeq4onebyonesubstrategAPGS8FRETfoursea50nMconce2_GAPSeqonebyoneGAP36AL532Exp200_locImage.tiff"
+        # crop_mode = self.localisation_channel.currentIndex()
+        # localisation_threshold = self.localisation_threshold.value()
 
         if import_gapseq is True:
 
