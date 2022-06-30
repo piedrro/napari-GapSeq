@@ -594,6 +594,9 @@ class GapSeqTabWidget(QWidget):
 
     def initialise_gapseq_undrift(self):
 
+        img = self.viewer.layers["localisation_image"].data[0].copy()
+        self.viewer.layers["localisation_image"].data = np.zeros_like(img)
+
         worker = Worker(self.gapseq_undrift)
         worker.signals.result.connect(self.process_gapseq_undrift)
         worker.signals.progress.connect(partial(self.gapseq_progressbar, progressbar="undrift"))
