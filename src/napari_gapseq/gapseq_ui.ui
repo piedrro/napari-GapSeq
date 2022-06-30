@@ -30,7 +30,7 @@
        </font>
       </property>
       <property name="text">
-       <string>Import</string>
+       <string>Import Localisation Image/File</string>
       </property>
      </widget>
     </item>
@@ -63,14 +63,47 @@
         </item>
        </widget>
       </item>
-      <item row="0" column="0">
-       <widget class="QPushButton" name="localisation_import_image">
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_37">
         <property name="text">
-         <string>Import Localisation Image</string>
+         <string>Frame Stacking Mode</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="localisation_stack_mode">
+        <item>
+         <property name="text">
+          <string>Mean</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Max</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Standard Deviation</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="label_40">
+        <property name="text">
+         <string>Channel</string>
         </property>
        </widget>
       </item>
      </layout>
+    </item>
+    <item>
+     <widget class="QPushButton" name="localisation_import_image">
+      <property name="text">
+       <string>Import Localisation Image</string>
+      </property>
+     </widget>
     </item>
     <item>
      <spacer name="verticalSpacer_5">

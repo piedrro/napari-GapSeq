@@ -177,6 +177,7 @@ class GapSeqTabWidget(QWidget):
 
         #register QWidgets/Controls
         self.localisation_channel = self.findChild(QComboBox,"localisation_channel")
+        self.localisation_stack_mode = self.findChild(QComboBox,"localisation_stack_mode")
         self.localisation_import_image = self.findChild(QPushButton,"localisation_import_image")
         self.localisation_type = self.findChild(QComboBox,"localisation_type")
         self.localisation_threshold = self.findChild(QSlider,"localisation_threshold")
@@ -638,7 +639,6 @@ class GapSeqTabWidget(QWidget):
                     breakpoint_trace.extend(value)
 
         return breakpoint_trace
-
 
     def threaded_export_traces(self, mode="excel"):
 
@@ -1966,6 +1966,10 @@ class GapSeqTabWidget(QWidget):
                 self.fit_localisations()
                 self.box_layer.mouse_drag_callbacks.append(self.localisation_click_events)
 
+                # pd.DataFrame(bounding_box_centres).to_csv("dev/bounding_boxes.txt")
+
+
+
     def fit_localisations(self):
 
         threshold_image = self.localisation_threshold_layer.data
@@ -2074,6 +2078,25 @@ class GapSeqTabWidget(QWidget):
 
         return p
 
+    def stack_image(self, image):
+
+        stack_mode = self.localisation_stack_mode.currentIndex()
+
+        if stack_mode == 0:
+
+            image = np.mean(image,axis=0)
+
+        if stack_mode == 1:
+
+            image = np.max(image,axis=0)
+
+        if stack_mode == 2:
+
+            image = np.std(image,axis=0)
+
+        return image
+
+
     def import_localisation_image(self, meta = [], import_gapseq = False):
 
         path = r"C:/napari-gapseq/src/napari_gapseq/dev/20220527_27thMay2022GAP36A/27thMay2022GAPSeq4onebyonesubstrategAPGS8FRETfoursea50nMconce2_GAPSeqonebyoneGAP36AL532Exp200.tif"
@@ -2104,16 +2127,17 @@ class GapSeqTabWidget(QWidget):
                 meta["crop_mode"] = 0
 
                 image = np.moveaxis(image, -1, 0)
-                image = np.mean(image, axis=0).astype(np.uint8)
 
-                image = difference_of_gaussians(image, 1)
+                img = self.stack_image(image).astype(np.uint8)
 
-                _, localisation_mask = cv.threshold(image, localisation_threshold, 255, cv.THRESH_BINARY)
+                img = difference_of_gaussians(img, 1)
+
+                _, localisation_mask = cv.threshold(img, localisation_threshold, 255, cv.THRESH_BINARY)
 
                 footprint = disk(1)
-                image = erosion(image, footprint)
+                localisation_mask = erosion(localisation_mask, footprint)
 
-                localisation_threshold_image = np.hstack((image,localisation_mask))
+                localisation_threshold_image = np.hstack((img,localisation_mask))
 
                 meta["localisation_threshold"] = localisation_threshold
                 meta["path"] = path
@@ -2123,7 +2147,7 @@ class GapSeqTabWidget(QWidget):
                 image, meta = self.read_image_file(path,crop_mode)
                 meta["crop_mode"] = crop_mode
 
-                img = np.max(image, axis=0)
+                img = self.stack_image(image)
 
                 img = difference_of_gaussians(img, 1)
 
@@ -2133,10 +2157,10 @@ class GapSeqTabWidget(QWidget):
 
                 # localisation_mask_image = cv.fastNlMeansDenoising(img, h=30, templateWindowSize=5, searchWindowSize=31)
 
-                footprint = disk(1)
-                localisation_mask_image = erosion(img, footprint)
-
                 _, localisation_mask = cv.threshold(img, localisation_threshold, 255, cv.THRESH_BINARY)
+
+                footprint = disk(1)
+                localisation_mask = erosion(localisation_mask, footprint)
 
                 localisation_threshold_image = np.hstack((img,localisation_mask))
 
@@ -2177,6 +2201,9 @@ class GapSeqTabWidget(QWidget):
             self.fit_plot_channel.addItems(["localisation_image"])
             self.viewer.reset_view()
             self.sort_layer_order()
+
+
+
 
     def import_image_file(self):
 
