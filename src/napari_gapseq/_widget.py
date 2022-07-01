@@ -43,6 +43,7 @@ import scipy
 plt.style.use('dark_background')
 
 from typing import TYPE_CHECKING
+from multiprocessing import Pool, shared_memory
 
 from magicgui import magic_factory
 from qtpy.QtWidgets import QHBoxLayout, QPushButton, QWidget
@@ -206,9 +207,6 @@ def fitgaussian(data, params = []):
     return p
 
 
-
-
-
 def crop_image(img, crop_mode=0):
 
     if crop_mode != 0:
@@ -314,6 +312,7 @@ def load_undrift_segment(index_list, path, crop_mode,stack_mode, box_centres, lo
 
 
 def process_loc_data(loc_data, n_frames):
+
     loc0_centres = np.array(loc_data.pop(0)["loc_centers"])
 
     drift = [[0, 0]]
@@ -373,6 +372,76 @@ def undrift_image(index, path, drift):
         img = scipy.ndimage.shift(img, drift[index])
 
         return [index, img]
+
+
+def compute_box_stats(box_data, shared_image_object, shared_background_object):
+
+    try:
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+            frame = box_data["frame"]
+
+            image_shm = shared_memory.SharedMemory(name=shared_image_object.name)
+            image = np.ndarray(box_data["image_shape"], dtype=box_data["image_type"], buffer=image_shm.buf)[frame]
+
+            background_shm = shared_memory.SharedMemory(name=shared_background_object.name)
+            background_image = np.ndarray(box_data["image_shape"], dtype=box_data["image_type"], buffer=background_shm.buf)[frame]
+
+            box = box_data["box"]
+            [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = box
+
+            cx, cy = box_data["box_centre"]
+            box_class = box_data["box_class"]
+            box_size = box_data["box_class"]
+            background_box_size = 20
+
+            img = image[int(y1):int(y2), int(x1):int(x2)].copy()
+
+            box_data["box_mean"] = np.nanmean(img)
+            box_data["box_std"] = np.nanstd(img)
+            box_data["box_range"] = np.nanmax(img) - np.nanmin(img)
+
+            params = fitgaussian(img)
+
+            [[y1, x1], [y2, x2]] = [[cy - background_box_size, cx - background_box_size],
+                                    [cy + background_box_size, cx + background_box_size]]
+
+            local_background_data = background_image[int(y1):int(y2), int(x1):int(x2)].copy()
+
+            box_data["local_background"] = np.mean(local_background_data)
+
+            cy = cy + 1 - box_size + params[1]
+            cx = cx + 1 - box_size + params[2]
+
+            box_data["box_class"] = box_class
+            box_data["gaussian_height"] = params[0]
+            box_data["gaussian_x"] = cy
+            box_data["gaussian_y"] = cx
+            box_data["gausian_width"] = np.mean([params[3], params[4]])
+            box_data["gausian_aspect_ratio"] = np.max([params[3], params[4]]) - np.mean([params[3], params[4]])
+
+            del image
+            del background_image
+            image_shm.close()
+            background_shm.close()
+
+    except:
+        pass
+
+    return box_data
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -540,7 +609,7 @@ class GapSeqTabWidget(QWidget):
 
         self.plot_background_subtraction_mode.currentIndexChanged.connect(self.plot_graphs)
 
-        self.plot_compute.clicked.connect(self.compute_plot_data_mp)
+        self.plot_compute.clicked.connect(self.initalise_gapseq_compute_traces)
 
         self.gapseq_export_data.clicked.connect(self.export_data)
 
@@ -587,6 +656,143 @@ class GapSeqTabWidget(QWidget):
         # self.import_localisation_image()
         # self.detect_localisations()
 
+
+
+    def get_gapseq_compute_iterator(self, layer):
+
+        meta = self.box_layer.metadata.copy()
+
+        bounding_box_centres = meta["bounding_box_centres"]
+        bounding_box_class = meta["bounding_box_class"]
+        bounding_box_size = meta["bounding_box_size"]
+
+        bounding_boxes = self.box_layer.data.copy()
+
+        image = self.viewer.layers[layer].data
+
+        compute_iterator = []
+
+        for frame in range(image.shape[0]):
+
+            for i in range(1):
+
+                box = bounding_boxes[i]
+                box_centre = bounding_box_centres[i]
+                box_class = bounding_box_class[i]
+
+                mp_dict = dict(frame = frame, box=box, box_centre=box_centre, box_class = box_class,
+                                box_size = bounding_box_size, image_shape = image.shape, image_type = image.dtype,
+                                box_index = i, layer = layer)
+
+                compute_iterator.append(mp_dict)
+
+        return compute_iterator
+
+    def process_localisation_data(self, localisation_data):
+
+        localisation_data = pd.DataFrame(localisation_data)
+
+        localisation_data = localisation_data.groupby(["box_index"])
+
+        localisation_dict = {}
+
+        layer = localisation_data.get_group(list(localisation_data.groups)[0])["layer"].unique()[0]
+
+        localisation_dict[layer] = {}
+
+        for i in range(len(localisation_data)):
+
+            data = localisation_data.get_group(list(localisation_data.groups)[i])
+
+            data = data.sort_values(["frame", "box_index"])
+
+            localisation_dict[layer][i] = {"box_mean": data.box_mean.tolist(),
+                                           "box_std": data.box_std.tolist(),
+                                           "box_range": data.box_range.tolist(),
+                                           "local_background": data.local_background.tolist(),
+                                           "gaussian_height": data.gaussian_height.tolist(),
+                                           "gaussian_x": data.gaussian_x.tolist(),
+                                           "gaussian_y": data.gaussian_y.tolist(),
+                                           "gausian_width": data.gausian_width.tolist()}
+
+        return localisation_dict
+
+
+
+    def gapseq_compute_traces(self, progress_callback, layer):
+
+        bounding_boxes = self.box_layer.data.copy()
+        meta = self.box_layer.metadata.copy()
+
+        bounding_box_centres = meta["bounding_box_centres"]
+        bounding_box_class = meta["bounding_box_class"]
+        bounding_box_size = meta["bounding_box_size"]
+
+        image = self.viewer.layers[layer].data
+        background_image, masked_image = self.get_background_mask(bounding_boxes, bounding_box_size, bounding_box_centres, image)
+
+        shared_image_object = shared_memory.SharedMemory(create=True, size=image.nbytes)
+        shared_image = np.ndarray(image.shape, dtype=image.dtype, buffer=shared_image_object.buf)
+        shared_image[:] = image[:]
+
+        shared_background_object = shared_memory.SharedMemory(create=True, size=background_image.nbytes)
+        shared_background = np.ndarray(background_image.shape, dtype=background_image.dtype, buffer=shared_background_object.buf)
+        shared_background[:] = background_image[:]
+
+        compute_iterator = self.get_gapseq_compute_iterator(layer)
+
+        with Pool() as p:
+
+            def callback(*args):
+                iter.append(1)
+                progress = (len(iter) / len(compute_iterator)) * 100
+
+                if progress_callback != None:
+                    progress_callback.emit(progress)
+
+                return
+
+            iter = []
+
+            results = [p.apply_async(compute_box_stats, args=(i,), kwds={'shared_image_object': shared_image_object,
+                                                                          'shared_background_object': shared_background_object}, callback=callback) for i in compute_iterator]
+
+            localisation_data = [r.get() for r in results]
+
+            localisation_data = self.process_localisation_data(localisation_data)
+
+            return localisation_data
+
+
+    def process_gapseq_compute_traces(self, localisation_data):
+
+        meta = self.box_layer.metadata
+
+        if "localisation_data" in meta.keys():
+
+            for layer,data in localisation_data.items():
+
+                meta["localisation_data"][layer] = data
+
+        else:
+
+            meta["localisation_data"] = localisation_data
+
+        self.plot_compute_progress.setValue(0)
+
+
+
+    def initalise_gapseq_compute_traces(self):
+
+        image_layers = [layer.name for layer in self.viewer.layers if layer.name not in ["bounding_boxes", "localisation_threshold"]]
+
+        for layer in image_layers:
+
+            worker = Worker(partial(self.gapseq_compute_traces, layer = layer))
+            worker.signals.result.connect(self.process_gapseq_compute_traces)
+            worker.signals.progress.connect(partial(self.gapseq_progressbar, progressbar="compute"))
+            self.threadpool.start(worker)
+
     def process_gapseq_undrift(self, image):
 
         self.viewer.layers["localisation_image"].data = image
@@ -619,8 +825,6 @@ class GapSeqTabWidget(QWidget):
         image_index = np.split(np.arange(n_frames),n_segments)
 
         loc0_data = load_undrift_segment(image_index[0], path=path, box_centres=box_centres, crop_mode = crop_mode, stack_mode = stack_mode)
-
-        from multiprocessing import Pool
 
         with Pool() as p:
 
@@ -659,8 +863,6 @@ class GapSeqTabWidget(QWidget):
             p.join()
 
         return images
-
-
 
     def update_cpd_controls(self):
 
