@@ -14,7 +14,7 @@
    <string>TabWidget</string>
   </property>
   <property name="currentIndex">
-   <number>0</number>
+   <number>2</number>
   </property>
   <widget class="QWidget" name="tab_localisations">
    <attribute name="title">
@@ -866,14 +866,14 @@
         </item>
        </widget>
       </item>
-      <item row="2" column="0">
+      <item row="3" column="0">
        <widget class="QLabel" name="label_17">
         <property name="text">
          <string>Localisation Filter</string>
         </property>
        </widget>
       </item>
-      <item row="2" column="1">
+      <item row="3" column="1">
        <widget class="QComboBox" name="plot_localisation_filter">
         <item>
          <property name="text">
@@ -932,21 +932,21 @@
         </item>
        </widget>
       </item>
-      <item row="1" column="0">
+      <item row="2" column="0">
        <widget class="QLabel" name="label_24">
         <property name="text">
          <string>Background Subtraction mode</string>
         </property>
        </widget>
       </item>
-      <item row="3" column="0">
+      <item row="4" column="0">
        <widget class="QLabel" name="label_26">
         <property name="text">
          <string>Nucleotide Filter</string>
         </property>
        </widget>
       </item>
-      <item row="3" column="1">
+      <item row="4" column="1">
        <widget class="QComboBox" name="plot_nucleotide_filter">
         <item>
          <property name="text">
@@ -975,7 +975,7 @@
         </item>
        </widget>
       </item>
-      <item row="1" column="1">
+      <item row="2" column="1">
        <widget class="QComboBox" name="plot_background_subtraction_mode">
         <item>
          <property name="text">
@@ -990,6 +990,42 @@
         <item>
          <property name="text">
           <string>Global Background Subtraction</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_43">
+        <property name="text">
+         <string>Plot Metric</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="plot_metric">
+        <item>
+         <property name="text">
+          <string>Bounding Box Mean</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Bouding Box Standard Deviation</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Bounding Box Range</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Gaussian Height</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Gaussain Width</string>
          </property>
         </item>
        </widget>
