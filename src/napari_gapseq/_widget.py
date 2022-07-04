@@ -445,7 +445,11 @@ def compute_box_stats(box_data, shared_image_object, shared_background_object, t
 
                 box_data[i]["box_range"] = np.nanmax(img) - np.nanmin(img)
                 box_data[i]["box_range_global_background"] = np.nanmax(background_image) - np.nanmin(background_image)
-                box_data[i]["box_range_local_background"] = np.nanmax(local_background_data) - np.nanmin(local_background_data)
+                try:
+                    box_data[i]["box_range_local_background"] = np.nanmax(local_background_data.copy()) - np.nanmin(local_background_data.copy())
+                except:
+                    box_data[i]["box_range_local_background"] = 0
+
 
                 params, success = fitgaussian(img)
 
@@ -726,7 +730,7 @@ class GapSeqTabWidget(QWidget):
 
         for frame in range(image.shape[0]):
 
-            for i in range(10):
+            for i in range(len(bounding_boxes)):
 
                 box = bounding_boxes[i].tolist()
                 box_centre = bounding_box_centres[i]
@@ -1800,15 +1804,17 @@ class GapSeqTabWidget(QWidget):
                 break_points = meta["bounding_box_breakpoints"][layer][localisation_number]
                 bounding_box_trace = meta["bounding_box_traces"][layer][localisation_number]
 
-                start = break_points[np.max(np.where(np.array(break_points) < frame_int))]
-                end = break_points[np.min(np.where(np.array(break_points) > frame_int))]
+                if len(break_points) > 0:
 
-                bounding_box_trace[start:end] = [int(key)] * (end-start)
+                    start = break_points[np.max(np.where(np.array(break_points) < frame_int))]
+                    end = break_points[np.min(np.where(np.array(break_points) > frame_int))]
 
-                meta["bounding_box_traces"][layer][localisation_number] = bounding_box_trace.tolist()
+                    bounding_box_trace[start:end] = [int(key)] * (end-start)
 
-                self.box_layer.metadata = meta
-                self.plot_fit_graph()
+                    meta["bounding_box_traces"][layer][localisation_number] = bounding_box_trace
+
+                    self.box_layer.metadata = meta
+                    self.plot_fit_graph()
 
     def manual_break_point_edit(self, event):
 
