@@ -442,18 +442,11 @@ def compute_box_stats(box_data, shared_image_object, shared_background_object):
 
     return box_data
 
-
-
-
-
-
-
-
-
-
-
-
-
+class json_np_encoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.int32):
+            return int(obj)
+        return json.JSONEncoder.default(self, obj)
 
 class GapSeqTabWidget(QWidget):
 
@@ -668,8 +661,6 @@ class GapSeqTabWidget(QWidget):
         # self.import_localisation_image()
         # self.detect_localisations()
 
-
-
     def get_gapseq_compute_iterator(self, layer):
 
         meta = self.box_layer.metadata.copy()
@@ -686,8 +677,8 @@ class GapSeqTabWidget(QWidget):
 
         for frame in range(image.shape[0]):
 
-            for i in range(len(bounding_boxes)):
-                box = bounding_boxes[i]
+            for i in range(10):
+                box = bounding_boxes[i].tolist()
                 box_centre = bounding_box_centres[i]
                 box_class = bounding_box_class[i]
 
@@ -730,6 +721,7 @@ class GapSeqTabWidget(QWidget):
                                            "box_std": data.box_std.tolist(),
                                            "box_range": data.box_range.tolist(),
                                            "local_background": data.local_background.tolist(),
+                                           "global_background": data.global_background.tolist(),
                                            "gaussian_height": data.gaussian_height.tolist(),
                                            "gaussian_x": data.gaussian_x.tolist(),
                                            "gaussian_y": data.gaussian_y.tolist(),
@@ -788,7 +780,7 @@ class GapSeqTabWidget(QWidget):
 
     def process_gapseq_compute_traces(self, localisation_data):
 
-        meta = self.box_layer.metadata
+        meta = self.box_layer.metadata.copy()
 
         if "localisation_data" in meta.keys():
 
@@ -797,13 +789,38 @@ class GapSeqTabWidget(QWidget):
                 meta["localisation_data"][layer] = data
 
         else:
-
             meta["localisation_data"] = localisation_data
 
+        layer_image_shape = {}
+        bounding_box_breakpoints = {}
+        bounding_box_traces = {}
+
+        image_layers = [layer.name for layer in self.viewer.layers if
+                        layer.name not in ["bounding_boxes", "localisation_threshold"]]
+
+        for layer in image_layers:
+
+            image = self.viewer.layers[layer].data
+            data = localisation_data[layer][0]["box_mean"]
+            layer_image_shape[layer] = image.shape
+
+            bounding_box_breakpoints[layer] = []
+            bounding_box_traces[layer] = []
+
+            for i in range(len(localisation_data[layer])):
+
+                bounding_box_breakpoints[layer].append([])
+                bounding_box_traces[layer].append([0] * len(data))
+
+        meta["layer_image_shape"] = layer_image_shape
+        meta["bounding_box_breakpoints"] = bounding_box_breakpoints
+        meta["bounding_box_traces"] = bounding_box_traces
+
+        self.box_layer.metadata = meta
         self.plot_compute_progress.setValue(0)
 
         self.plot_graphs()
-
+        self.plot_fit_graph()
 
 
     def initalise_gapseq_compute_traces(self):
@@ -1338,7 +1355,7 @@ class GapSeqTabWidget(QWidget):
         if os.path.isfile(path):
 
             with open(path, 'r', encoding='utf-8') as f:
-                gapseq_data = json.load(f)
+                gapseq_data = json.load(f, parse_int=int)
 
             bounding_boxes = gapseq_data["bounding_boxes"]
             image_layers = gapseq_data["image_layers"]
@@ -1389,15 +1406,22 @@ class GapSeqTabWidget(QWidget):
             meta["localisation_threshold"] = gapseq_data["localisation_threshold"]
             meta["bounding_box_size"] = gapseq_data["bounding_box_size"]
             meta["image_layers"] = gapseq_data["image_layers"]
-            meta["bounding_box_data"] = gapseq_data["bounding_box_data"]
             meta["image_paths"] = gapseq_data["image_paths"]
             meta["image_metadata"] = gapseq_data["image_metadata"]
             meta["layer_image_shape"] = gapseq_data["layer_image_shape"]
-            meta["background_data"] = gapseq_data["background_data"]
             meta["nucleotide_class"] = gapseq_data["nucleotide_class"]
             meta["localisation_type"] = gapseq_data["localisation_type"]
             meta["bounding_box_breakpoints"] = gapseq_data["bounding_box_breakpoints"]
             meta["bounding_box_traces"] = gapseq_data["bounding_box_traces"]
+
+            localisation_data = gapseq_data["localisation_data"]
+
+            new_localisation_data = {}
+            for layer_key,layer_value in localisation_data.items():
+                new_localisation_data[layer_key] = {}
+                for localisation_key, localisation_value in layer_value.items():
+                    new_localisation_data[layer_key][int(localisation_key)] = localisation_value
+            meta["localisation_data"] = new_localisation_data
 
             if "bounding_boxes" in self.viewer.layers:
 
@@ -1423,30 +1447,31 @@ class GapSeqTabWidget(QWidget):
                     self.box_layer.mouse_drag_callbacks.append(self.localisation_click_events)
 
             self.sort_layer_order()
+
             self.plot_graphs()
             self.fit_plot_channel.addItems(image_layers)
             self.plot_fit_graph()
+
 
     def export_data(self):
 
         if "bounding_boxes" in self.viewer.layers:
 
-            if "bounding_box_data" in self.box_layer.metadata.keys():
+            if "localisation_data" in self.box_layer.metadata.keys():
 
                 bounding_boxes = self.box_layer.data.copy()
 
                 meta = self.box_layer.metadata.copy()
 #
-                bounding_box_data = meta["bounding_box_data"]
                 bounding_box_centres = meta["bounding_box_centres"]
                 bounding_box_class = meta["bounding_box_class"]
                 bounding_box_size = meta["bounding_box_size"]
                 layer_image_shape = meta["layer_image_shape"]
-                background_data = meta["background_data"]
                 nucleotide_class = meta["nucleotide_class"]
                 localisation_type = meta["localisation_type"]
                 bounding_box_breakpoints = meta["bounding_box_breakpoints"]
                 bounding_box_traces = meta["bounding_box_traces"]
+                localisation_data = meta["localisation_data"]
 
                 bounding_boxes = [box.tolist() for box in bounding_boxes]
 
@@ -1484,21 +1509,20 @@ class GapSeqTabWidget(QWidget):
                     gapseq_data = dict(bounding_boxes=bounding_boxes,
                                        bounding_box_centres=bounding_box_centres,
                                        bounding_box_class=bounding_box_class,
+                                       localisation_data=localisation_data,
                                        localisation_threshold = self.localisation_threshold.value(),
                                        bounding_box_size=bounding_box_size,
                                        image_layers = image_layers,
-                                       bounding_box_data = bounding_box_data,
                                        image_paths = image_paths,
                                        image_metadata = image_metadata,
                                        layer_image_shape = layer_image_shape,
-                                       background_data = background_data,
                                        nucleotide_class = nucleotide_class,
                                        localisation_type = localisation_type,
                                        bounding_box_breakpoints = bounding_box_breakpoints,
                                        bounding_box_traces = bounding_box_traces)
 
                     with open(path, 'w', encoding='utf-8') as f:
-                        json.dump(gapseq_data, f, ensure_ascii=False, indent=4)
+                        json.dump(gapseq_data, f, ensure_ascii=False, indent=4, cls = json_np_encoder)
 
     def get_background_mask(self, bounding_boxes,bounding_box_size, bounding_box_centres, image):
 
@@ -1727,7 +1751,7 @@ class GapSeqTabWidget(QWidget):
 
                 bounding_box_trace[start:end] = [int(key)] * (end-start)
 
-                meta["bounding_box_traces"][layer][localisation_number] = bounding_box_trace
+                meta["bounding_box_traces"][layer][localisation_number] = bounding_box_trace.tolist()
 
                 self.box_layer.metadata = meta
                 self.plot_fit_graph()
@@ -1748,7 +1772,8 @@ class GapSeqTabWidget(QWidget):
             layer = [str(line.get_label()) for line in lines if str(line.get_label()) != "Frame"][0]
 
             meta = self.box_layer.metadata.copy()
-            data = meta["bounding_box_data"][layer][localisation_number]
+            data, _ = self.get_gapseq_trace_data(layer,localisation_number)
+
             hmm_states = self.fit_hmm_states.value()
 
             if "bounding_box_breakpoints" in meta.keys():
@@ -1800,7 +1825,7 @@ class GapSeqTabWidget(QWidget):
 
         if "bounding_boxes" in self.viewer.layers:
 
-            if "bounding_box_data" in self.box_layer.metadata.keys():
+            if "localisation_data" in self.box_layer.metadata.keys():
 
                 bounding_boxes = self.box_layer.data.copy()
                 meta = self.box_layer.metadata.copy()
@@ -1865,6 +1890,7 @@ class GapSeqTabWidget(QWidget):
                                 meta["bounding_box_traces"][data["layer"]][i] = bounding_box_trace
 
                         except:
+                            print(traceback.format_exc())
                             pass
 
                 self.box_layer.metadata = meta
@@ -1880,39 +1906,38 @@ class GapSeqTabWidget(QWidget):
 
                 plot_data = self.get_fit_graph_data()
 
-                # if plot_data != None:
-                #
-                #     x = plot_data["x"]
-                #     y = plot_data["y"]
-                #
-                #     localisation_number = plot_data["localisation_number"]
-                #     bounding_box_trace = plot_data["bounding_box_trace"]
-                #
-                #     self.fit_graph_canvas.figure.clf()
-                #     axes = self.fit_graph_canvas.figure.add_subplot(111)
-                #     axes.set_facecolor("#262930")
-                #     axes.plot(x, y, label=plot_data["layer"])
-                #
-                #     if xlim != None:
-                #         axes.set_xlim(xlim)
-                #     else:
-                #         axes.set_xlim(plot_data["x_min"], plot_data["x_max"])
-                #
-                #     if ylim != None:
-                #         axes.set_ylim(ylim)
-                #
-                #     break_points = plot_data["break_points"]
-                #
-                #     if len(break_points) > 0 and self.show_cpd_breakpoints.isChecked():
-                #         axes.vlines(break_points, ymin = plot_data["y_min"], ymax=plot_data["y_max"], colors="red",label="Change Points")
-                #
-                #     if self.show_cpd_states.isChecked():
-                #         axes2 = axes.twinx()
-                #         axes2.plot(bounding_box_trace, color='blue',label="States")
-                #
-                #     self.fit_graph_canvas.figure.tight_layout()
-                #     self.fit_graph_canvas.draw()
+                if plot_data != None:
 
+                    x = plot_data["x"]
+                    y = plot_data["y"]
+
+                    localisation_number = plot_data["localisation_number"]
+                    bounding_box_trace = plot_data["bounding_box_trace"]
+
+                    self.fit_graph_canvas.figure.clf()
+                    axes = self.fit_graph_canvas.figure.add_subplot(111)
+                    axes.set_facecolor("#262930")
+                    axes.plot(x, y, label=plot_data["layer"])
+
+                    if xlim != None:
+                        axes.set_xlim(xlim)
+                    else:
+                        axes.set_xlim(plot_data["x_min"], plot_data["x_max"])
+
+                    if ylim != None:
+                        axes.set_ylim(ylim)
+
+                    break_points = plot_data["break_points"]
+
+                    if len(break_points) > 0 and self.show_cpd_breakpoints.isChecked():
+                        axes.vlines(break_points, ymin = plot_data["y_min"], ymax=plot_data["y_max"], colors="red",label="Change Points")
+
+                    if self.show_cpd_states.isChecked():
+                        axes2 = axes.twinx()
+                        axes2.plot(bounding_box_trace, color='blue',label="States")
+
+                    self.fit_graph_canvas.figure.tight_layout()
+                    self.fit_graph_canvas.draw()
 
 
     def get_fit_graph_data(self, layer = None, localisation_number = None, background_subtraction_mode = None):
@@ -1934,12 +1959,17 @@ class GapSeqTabWidget(QWidget):
 
                     meta = self.box_layer.metadata.copy()
 
-                    localisation_data = meta["localisation_data"][layer][localisation_number]
+                    localisation_data = meta["localisation_data"]
 
-                    bounding_box_data = meta["bounding_box_data"]
+                    bounding_box_data = localisation_data[layer][localisation_number]
 
-                    data = bounding_box_data[layer][localisation_number]
-                    background_data = meta["background_data"]
+                    plot_metric_index = self.plot_metric.currentIndex()
+                    plot_metric_dict = {0: "box_mean", 1: "box_std", 2: "box_range",
+                                        3: "gaussian_height", 4: "gausian_width"}
+
+                    plot_metric = plot_metric_dict[plot_metric_index]
+
+                    data = bounding_box_data[plot_metric]
 
 
                     if "bounding_box_breakpoints" in self.box_layer.metadata.keys():
@@ -1952,13 +1982,13 @@ class GapSeqTabWidget(QWidget):
                     x_min = 0
                     x_max = len(data)
 
-                    if background_subtraction_mode == 1 and background_data != None:
-                        background = background_data[layer]["local_background"][localisation_number]
+                    if background_subtraction_mode == 1 and 'local_background' in bounding_box_data.keys():
+                        background = bounding_box_data["local_background"]
                         data = list(np.array(data) - np.array(background))
                         data = list(data - np.min(data))
 
-                    if background_subtraction_mode == 2 and background_data != None:
-                        background = background_data[layer]["global_background"]
+                    if background_subtraction_mode == 2 and 'global_background' in bounding_box_data.keys():
+                        background = bounding_box_data["global_background"]
                         data = np.array(data) - np.array(background)
                         data = list(data - np.min(data))
 
@@ -2107,6 +2137,33 @@ class GapSeqTabWidget(QWidget):
 
                 self.viewer.layers.move(layer_index, num_layers)
 
+
+    def get_gapseq_trace_data(self, layer, localisation_number, plot_metric_index = 0, background_subtraction_mode = 0):
+
+        plot_metric_dict = {0: "box_mean", 1: "box_std", 2: "box_range",
+                            3: "gaussian_height", 4: "gausian_width"}
+
+        plot_metric = plot_metric_dict[plot_metric_index]
+
+        localisation_data = self.box_layer.metadata["localisation_data"]
+
+        bounding_box_data = localisation_data[layer][localisation_number]
+
+        data = bounding_box_data[plot_metric]
+
+        if background_subtraction_mode == 1 and 'local_background' in bounding_box_data.keys():
+            background = bounding_box_data["local_background"]
+            data = list(np.array(data) - np.array(background))
+            data = list(data - np.min(data))
+
+        if background_subtraction_mode == 2 and 'global_background' in bounding_box_data.keys():
+            background = bounding_box_data["global_background"]
+            data = np.array(data) - np.array(background)
+            data = list(data - np.min(data))
+
+        return data, bounding_box_data
+
+
     def get_plot_data(self, layers = ["localisation_image"]):
 
         localisation_filter = self.plot_localisation_filter.currentText()
@@ -2117,8 +2174,6 @@ class GapSeqTabWidget(QWidget):
             meta = self.box_layer.metadata.copy()
 
             localisation_data = meta["localisation_data"]
-
-            plot_background_subtraction_mode = self.plot_background_subtraction_mode.currentIndex()
 
             plot_data = []
 
@@ -2133,34 +2188,18 @@ class GapSeqTabWidget(QWidget):
 
                     if localisation_number != -1:
 
-                        bounding_box_data = localisation_data[layer][localisation_number]
-
-                        bounding_box = self.box_layer.data[localisation_number]
                         bounding_box_class = self.box_layer.metadata["bounding_box_class"][localisation_number]
                         nucleotide_class = self.box_layer.metadata["nucleotide_class"][localisation_number]
 
-
                         plot_metric_index = self.plot_metric.currentIndex()
-                        plot_metric_dict = {0:"box_mean",1:"box_std",2:"box_range",
-                                            3:"gaussian_height",4:"gausian_width"}
+                        background_subtraction_mode = self.plot_background_subtraction_mode.currentIndex()
 
-                        plot_metric = plot_metric_dict[plot_metric_index]
-
-                        data = bounding_box_data[plot_metric]
+                        data, bounding_box_data = self.get_gapseq_trace_data(layer,
+                                                                             localisation_number,
+                                                                             plot_metric_index,
+                                                                             background_subtraction_mode)
 
                         image_shape = bounding_box_data["image_shape"]
-
-                        if plot_background_subtraction_mode == 1 and 'local_background' in bounding_box_data.keys():
-
-                            background = bounding_box_data["local_background"]
-                            data = list(np.array(data) - np.array(background))
-                            data = list(data - np.min(data))
-
-                        if plot_background_subtraction_mode == 2 and 'global_background' in bounding_box_data.keys():
-
-                            background = bounding_box_data["global_background"]
-                            data = np.array(data) - np.array(background)
-                            data = list(data - np.min(data))
 
                         [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = bounding_box_data["bounding_box"]
 
@@ -2203,29 +2242,18 @@ class GapSeqTabWidget(QWidget):
 
                             if localisation_number >= 0:
 
-                                bounding_box_data = localisation_data[layer][localisation_number]
-
-                                bounding_box = self.box_layer.data[localisation_number]
                                 bounding_box_class = self.box_layer.metadata["bounding_box_class"][localisation_number]
                                 nucleotide_class = self.box_layer.metadata["nucleotide_class"][localisation_number]
 
                                 plot_metric_index = self.plot_metric.currentIndex()
-                                plot_metric_dict = {0: "box_mean", 1: "box_std", 2: "box_range",
-                                                    3: "gaussian_height", 4: "gausian_width"}
+                                background_subtraction_mode = self.plot_background_subtraction_mode.currentIndex()
 
-                                plot_metric = plot_metric_dict[plot_metric_index]
+                                data, bounding_box_data = self.get_gapseq_trace_data(layer,
+                                                                                     localisation_number,
+                                                                                     plot_metric_index,
+                                                                                     background_subtraction_mode)
 
                                 image_shape = bounding_box_data["image_shape"]
-
-                                if plot_background_subtraction_mode == 1 and 'local_background' in bounding_box_data.keys():
-                                    background = bounding_box_data["local_background"]
-                                    data = list(np.array(data) - np.array(background))
-                                    data = list(data - np.min(data))
-
-                                if plot_background_subtraction_mode == 2 and 'global_background' in bounding_box_data.keys():
-                                    background = bounding_box_data["global_background"]
-                                    data = np.array(data) - np.array(background)
-                                    data = list(data - np.min(data))
 
                                 [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = bounding_box_data["bounding_box"]
 
