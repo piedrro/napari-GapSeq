@@ -380,8 +380,6 @@ def compute_box_stats(box_data, shared_image_object, shared_background_object):
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-            # print(box_data[0]["frame"])
-
             frame = box_data[0]["frame"]
 
             image_shm = shared_memory.SharedMemory(
@@ -405,20 +403,24 @@ def compute_box_stats(box_data, shared_image_object, shared_background_object):
                 background_box_size = 10
 
                 img = image[int(y1):int(y2), int(x1):int(x2)].copy()
+                local_background_data = background_image[int(y1):int(y2), int(x1):int(x2)].copy()
 
                 box_data[i]["box_mean"] = np.nanmean(img)
+                box_data[i]["box_mean_global_background"] = np.nanmean(background_image)
+                box_data[i]["box_mean_local_background"] = np.nanmean(local_background_data)
+
                 box_data[i]["box_std"] = np.nanstd(img)
+                box_data[i]["box_std_global_background"] = np.nanstd(background_image)
+                box_data[i]["box_std_local_background"] = np.nanstd(local_background_data)
+
                 box_data[i]["box_range"] = np.nanmax(img) - np.nanmin(img)
+                box_data[i]["box_range_global_background"] = np.nanmax(background_image) - np.nanmin(background_image)
+                box_data[i]["box_range_local_background"] = np.nanmax(local_background_data) - np.nanmin(local_background_data)
 
                 params, success = fitgaussian(img)
 
                 [[y1, x1], [y2, x2]] = [[cy - background_box_size, cx - background_box_size],
                                         [cy + background_box_size, cx + background_box_size]]
-
-                box_data[i]["global_background"] = np.mean(background_image)
-
-                local_background_data = background_image[int(y1):int(y2), int(x1):int(x2)].copy()
-                box_data[i]["local_background"] = np.mean(local_background_data)
 
                 cy = cy + 1 - box_size + params[1]
                 cx = cx + 1 - box_size + params[2]
@@ -513,6 +515,7 @@ class GapSeqTabWidget(QWidget):
         self.traces_nucleotide_filter = self.findChild(QComboBox,"traces_nucleotide_filter")
         self.traces_data_selection = self.findChild(QComboBox,"traces_data_selection")
         self.traces_background_mode = self.findChild(QComboBox, "traces_background_mode")
+        self.traces_data_metric = self.findChild(QComboBox,"traces_data_metric")
         self.fit_traces_progress = self.findChild(QProgressBar,"fit_traces_progress")
         self.export_progress = self.findChild(QProgressBar,"export_progress")
 
@@ -529,6 +532,7 @@ class GapSeqTabWidget(QWidget):
         self.fit_localisation_number = self.findChild(QSlider,"fit_localisation_number")
         self.fit_graph_container = self.findChild(QWidget, "fit_graph_container")
         self.fit_plot_channel = self.findChild(QComboBox, "fit_plot_channel")
+        self.fit_plot_metric = self.findChild(QComboBox, "fit_plot_metric")
         self.fit_cpd_mode = self.findChild(QComboBox,"fit_cpd_mode")
         self.fit_active = self.findChild(QPushButton,"fit_active")
         self.fit_all = self.findChild(QPushButton,"fit_all")
@@ -582,6 +586,7 @@ class GapSeqTabWidget(QWidget):
 
         self.fit_cpd_mode.currentIndexChanged.connect(self.update_cpd_controls)
         self.show_cpd_breakpoints.stateChanged.connect(self.plot_fit_graph)
+        self.fit_plot_metric.currentIndexChanged.connect(self.plot_fit_graph)
         self.show_cpd_states.stateChanged.connect(self.plot_fit_graph)
 
         self.update_slider_label("localisation_aspect_ratio")
@@ -677,7 +682,8 @@ class GapSeqTabWidget(QWidget):
 
         for frame in range(image.shape[0]):
 
-            for i in range(10):
+            for i in range(len(bounding_boxes)):
+
                 box = bounding_boxes[i].tolist()
                 box_centre = bounding_box_centres[i]
                 box_class = bounding_box_class[i]
@@ -718,10 +724,14 @@ class GapSeqTabWidget(QWidget):
             data = data.sort_values(["frame", "box_index"])
 
             localisation_dict[layer][i] = {"box_mean": data.box_mean.tolist(),
+                                           "box_mean_local_background": data.box_mean_local_background.tolist(),
+                                           "box_mean_global_background": data.box_mean_global_background.tolist(),
                                            "box_std": data.box_std.tolist(),
+                                           "box_std_local_background": data.box_std_local_background.tolist(),
+                                           "box_std_global_background": data.box_std_global_background.tolist(),
                                            "box_range": data.box_range.tolist(),
-                                           "local_background": data.local_background.tolist(),
-                                           "global_background": data.global_background.tolist(),
+                                           "box_range_local_background": data.box_range_local_background.tolist(),
+                                           "box_range_global_background": data.box_range_global_background.tolist(),
                                            "gaussian_height": data.gaussian_height.tolist(),
                                            "gaussian_x": data.gaussian_x.tolist(),
                                            "gaussian_y": data.gaussian_y.tolist(),
@@ -1196,7 +1206,7 @@ class GapSeqTabWidget(QWidget):
 
         if "bounding_boxes" in self.viewer.layers:
 
-            if "bounding_box_data" in self.box_layer.metadata.keys():
+            if "localisation_data" in self.box_layer.metadata.keys():
 
                 meta = self.box_layer.metadata
 
@@ -1222,19 +1232,19 @@ class GapSeqTabWidget(QWidget):
 
                     localisation_filter = self.traces_class_filter.currentText()
                     nucleotide_filter = self.traces_nucleotide_filter.currentText()
+                    data_metric = self.traces_data_metric.currentIndex()
                     background_mode = self.traces_background_mode.currentIndex()
 
                     box_num = len(self.box_layer.data.copy())
                     meta = self.box_layer.metadata.copy()
 
-                    bounding_box_data = meta["bounding_box_data"]
                     bounding_box_class = meta["bounding_box_class"]
                     nucleotide_classes = meta["nucleotide_class"]
-                    background_data = meta["background_data"]
+                    localisation_data = meta["localisation_data"]
                     bounding_box_breakpoints = meta["bounding_box_breakpoints"]
                     bounding_box_traces = meta["bounding_box_traces"]
 
-                    layers = list(bounding_box_data.keys())
+                    layers = list(localisation_data.keys())
 
                     if self.traces_data_selection.currentIndex() == 0:
                         layers = [layer for layer in layers if layer == "localisation_image"]
@@ -1260,7 +1270,8 @@ class GapSeqTabWidget(QWidget):
 
                             layer = layers[j]
 
-                            box_data = bounding_box_data[layer][i]
+                            box_data, _ = self.get_gapseq_trace_data(layer,i,data_metric,background_mode)
+
                             box_class = bounding_box_class[i]
                             nucleotide_class = nucleotide_classes[i]
                             breakpoints = bounding_box_breakpoints[layer][i]
@@ -1271,14 +1282,6 @@ class GapSeqTabWidget(QWidget):
                                 trace = [0]*len(box_data)
 
                             if localisation_filter == "None" and nucleotide_filter == "None":
-
-                                if background_mode != 0:
-                                    if background_mode == 1:
-                                        background = background_data[layer]["local_background"][i]
-                                    if background_mode == 2:
-                                        background = background_data[layer]["global_background"][i]
-                                    box_data = list(np.array(box_data) - np.array(background))
-                                    box_data = list(box_data - np.min(box_data))
 
                                 image_trace_data.append(box_data)
                                 image_trace_index.append(i)
@@ -1957,23 +1960,16 @@ class GapSeqTabWidget(QWidget):
                     if background_subtraction_mode is None:
                         background_subtraction_mode = self.fit_background_subtraction_mode.currentIndex()
 
-                    meta = self.box_layer.metadata.copy()
+                    plot_metric_index = self.fit_plot_metric.currentIndex()
 
-                    localisation_data = meta["localisation_data"]
-
-                    bounding_box_data = localisation_data[layer][localisation_number]
-
-                    plot_metric_index = self.plot_metric.currentIndex()
-                    plot_metric_dict = {0: "box_mean", 1: "box_std", 2: "box_range",
-                                        3: "gaussian_height", 4: "gausian_width"}
-
-                    plot_metric = plot_metric_dict[plot_metric_index]
-
-                    data = bounding_box_data[plot_metric]
-
+                    data, bounding_box_data = self.get_gapseq_trace_data(layer,
+                                                                         localisation_number,
+                                                                         plot_metric_index,
+                                                                         background_subtraction_mode)
 
                     if "bounding_box_breakpoints" in self.box_layer.metadata.keys():
-                        break_points = self.box_layer.metadata["bounding_box_breakpoints"][layer][localisation_number]
+                        meta = self.box_layer.metadata
+                        break_points = meta["bounding_box_breakpoints"][layer][localisation_number]
                         bounding_box_trace = meta["bounding_box_traces"][layer][localisation_number]
                     else:
                         break_points = []
@@ -1981,16 +1977,6 @@ class GapSeqTabWidget(QWidget):
 
                     x_min = 0
                     x_max = len(data)
-
-                    if background_subtraction_mode == 1 and 'local_background' in bounding_box_data.keys():
-                        background = bounding_box_data["local_background"]
-                        data = list(np.array(data) - np.array(background))
-                        data = list(data - np.min(data))
-
-                    if background_subtraction_mode == 2 and 'global_background' in bounding_box_data.keys():
-                        background = bounding_box_data["global_background"]
-                        data = np.array(data) - np.array(background)
-                        data = list(data - np.min(data))
 
                     x = np.arange(len(data))
                     y = data
@@ -2151,13 +2137,13 @@ class GapSeqTabWidget(QWidget):
 
         data = bounding_box_data[plot_metric]
 
-        if background_subtraction_mode == 1 and 'local_background' in bounding_box_data.keys():
-            background = bounding_box_data["local_background"]
+        if background_subtraction_mode == 1 and plot_metric + '_local_background' in bounding_box_data.keys():
+            background = bounding_box_data[plot_metric + '_local_background']
             data = list(np.array(data) - np.array(background))
             data = list(data - np.min(data))
 
-        if background_subtraction_mode == 2 and 'global_background' in bounding_box_data.keys():
-            background = bounding_box_data["global_background"]
+        if background_subtraction_mode == 2 and plot_metric + '_global_background' in bounding_box_data.keys():
+            background = bounding_box_data[plot_metric + '_global_background']
             data = np.array(data) - np.array(background)
             data = list(data - np.min(data))
 

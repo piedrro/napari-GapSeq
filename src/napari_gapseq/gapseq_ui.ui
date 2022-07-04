@@ -14,7 +14,7 @@
    <string>TabWidget</string>
   </property>
   <property name="currentIndex">
-   <number>2</number>
+   <number>0</number>
   </property>
   <widget class="QWidget" name="tab_localisations">
    <attribute name="title">
@@ -1303,14 +1303,14 @@
       <item row="0" column="1">
        <widget class="QComboBox" name="fit_plot_channel"/>
       </item>
-      <item row="1" column="0">
+      <item row="2" column="0">
        <widget class="QLabel" name="label_39">
         <property name="text">
          <string>Background Subtract Mode</string>
         </property>
        </widget>
       </item>
-      <item row="1" column="1">
+      <item row="2" column="1">
        <widget class="QComboBox" name="fit_background_subtraction_mode">
         <item>
          <property name="text">
@@ -1327,6 +1327,42 @@
           <string>Global Background Subtraction</string>
          </property>
         </item>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="fit_plot_metric">
+        <item>
+         <property name="text">
+          <string>Bounding Box Mean</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Bouding Box Standard Deviation</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Bounding Box Range</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Gaussian Height</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Gaussain Width</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_44">
+        <property name="text">
+         <string>Plot Metric</string>
+        </property>
        </widget>
       </item>
      </layout>
@@ -1776,14 +1812,14 @@
     </item>
     <item>
      <layout class="QFormLayout" name="formLayout_3">
-      <item row="2" column="0">
+      <item row="3" column="0">
        <widget class="QLabel" name="label_21">
         <property name="text">
          <string>Localisation Class Filter</string>
         </property>
        </widget>
       </item>
-      <item row="2" column="1">
+      <item row="3" column="1">
        <widget class="QComboBox" name="traces_class_filter">
         <item>
          <property name="text">
@@ -1863,7 +1899,7 @@
         </property>
        </widget>
       </item>
-      <item row="3" column="1">
+      <item row="4" column="1">
        <widget class="QComboBox" name="traces_nucleotide_filter">
         <item>
          <property name="text">
@@ -1892,21 +1928,21 @@
         </item>
        </widget>
       </item>
-      <item row="3" column="0">
+      <item row="4" column="0">
        <widget class="QLabel" name="label_31">
         <property name="text">
          <string>Localisation Nucleotide Filter</string>
         </property>
        </widget>
       </item>
-      <item row="1" column="0">
+      <item row="2" column="0">
        <widget class="QLabel" name="label_32">
         <property name="text">
          <string>Background Subtraction Mode</string>
         </property>
        </widget>
       </item>
-      <item row="1" column="1">
+      <item row="2" column="1">
        <widget class="QComboBox" name="traces_background_mode">
         <item>
          <property name="text">
@@ -1923,6 +1959,42 @@
           <string>Global Background Subtraction</string>
          </property>
         </item>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="traces_data_metric">
+        <item>
+         <property name="text">
+          <string>Bounding Box Mean</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Bouding Box Standard Deviation</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Bounding Box Range</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Gaussian Height</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Gaussain Width</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_45">
+        <property name="text">
+         <string>Metric</string>
+        </property>
        </widget>
       </item>
      </layout>
