@@ -162,15 +162,14 @@ def find_contours(img):
 
 
 
-def gaussian(height, center_x, center_y, width_x, width_y):
+def gaussian(height, center_x, center_y, width):
 
     """Returns a gaussian function with the given parameters"""
 
-    width_x = float(width_x)
-    width_y = float(width_y)
+    width = float(width)
 
     return lambda x, y: height * np.exp(
-        -(((center_x - x) / width_x) ** 2 + ((center_y - y) / width_y) ** 2) / 2)
+        -(((center_x - x) / width) ** 2 + ((center_y - y) / width) ** 2) / 2)
 
 def moments(data):
 
@@ -184,14 +183,11 @@ def moments(data):
     y = (Y * data).sum() / total
 
     col = data[:, int(y)]
-    width_x = np.sqrt(np.abs((np.arange(col.size) - x) ** 2 * col).sum() / col.sum())
-
-    row = data[int(x), :]
-    width_y = np.sqrt(np.abs((np.arange(row.size) - y) ** 2 * row).sum() / row.sum())
+    width = np.sqrt(np.abs((np.arange(col.size) - x) ** 2 * col).sum() / col.sum())
 
     height = data.max()
 
-    return height, x, y, width_x, width_y
+    return height, x, y, width
 
 def fitgaussian(data, params = []):
 
@@ -276,7 +272,7 @@ def compute_undrift_localisations(image, box_centres, loc0_data=None, box_size=5
 
                 img = image[int(y1):int(y2), int(x1):int(x2)]
 
-                params = fitgaussian(img, params)
+                params, _ = fitgaussian(img, params)
 
                 cy = cy + 1 - box_size + params[1]
                 cx = cx + 1 - box_size + params[2]
