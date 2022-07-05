@@ -191,14 +191,19 @@ def moments(data):
 
 def fitgaussian(data, params = []):
 
-    """Returns (height, x, y, width_x, width_y)
-    the gaussian parameters of a 2D distribution found by a fit"""
+    try:
+        """Returns (height, x, y, width)
+        the gaussian parameters of a 2D distribution found by a fit"""
 
-    if len(params) == 0:
-        params = moments(data)
+        if len(params) == 0:
+            params = moments(data)
 
-    errorfunction = lambda p: np.ravel(gaussian(*p)(*np.indices(data.shape)) - data)
-    p, success = optimize.leastsq(errorfunction, params)
+        errorfunction = lambda p: np.ravel(gaussian(*p)(*np.indices(data.shape)) - data)
+        p, success = optimize.leastsq(errorfunction, params)
+
+    except:
+        p = 5
+        success = [0,0,0,0]
 
     return p, success
 
@@ -419,6 +424,7 @@ def compute_box_stats(box_data, shared_image_object, shared_background_object, t
             localisation_mask = threshold_localisation_image(image, threshold, box_min, box_max)
 
             for i in range(len(box_data)):
+
                 box = box_data[i]["box"]
                 [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = box
 
@@ -430,10 +436,10 @@ def compute_box_stats(box_data, shared_image_object, shared_background_object, t
                 img = image[int(y1):int(y2), int(x1):int(x2)].copy()
                 mask = localisation_mask[int(y1):int(y2), int(x1):int(x2)].copy()
 
-                [[y1,x1],[y2,x2]] = [[cy - background_box_size, cx - background_box_size],
-                                      [cy + background_box_size, cx + background_box_size]]
+                [[by1,bx1],[by2,bx2]] = [[cy - background_box_size, cx - background_box_size],
+                                         [cy + background_box_size, cx + background_box_size]]
 
-                local_background_data = background_image[int(y1):int(y2), int(x1):int(x2)].copy()
+                local_background_data = background_image[int(by1):int(by2), int(bx1):int(bx2)].copy()
 
                 box_data[i]["box_mean"] = np.nanmean(img)
                 box_data[i]["box_mean_global_background"] = np.nanmean(background_image)
@@ -443,7 +449,9 @@ def compute_box_stats(box_data, shared_image_object, shared_background_object, t
                 box_data[i]["box_std_global_background"] = np.nanstd(background_image)
                 box_data[i]["box_std_local_background"] = np.nanstd(local_background_data)
 
-                params, success = fitgaussian(img)
+                # params, success = fitgaussian(img)
+                params = [0,0,0,0,0]
+                success = 5
 
                 gaussian_x = cx + 1 - box_size + params[2]
                 gaussian_y = cy + 1 - box_size + params[1]
