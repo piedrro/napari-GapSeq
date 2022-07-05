@@ -443,14 +443,6 @@ def compute_box_stats(box_data, shared_image_object, shared_background_object, t
                 box_data[i]["box_std_global_background"] = np.nanstd(background_image)
                 box_data[i]["box_std_local_background"] = np.nanstd(local_background_data)
 
-                box_data[i]["box_range"] = np.nanmax(img) - np.nanmin(img)
-                box_data[i]["box_range_global_background"] = np.nanmax(background_image) - np.nanmin(background_image)
-                try:
-                    box_data[i]["box_range_local_background"] = np.nanmax(local_background_data.copy()) - np.nanmin(local_background_data.copy())
-                except:
-                    box_data[i]["box_range_local_background"] = 0
-
-
                 params, success = fitgaussian(img)
 
                 gaussian_x = cx + 1 - box_size + params[2]
@@ -777,9 +769,6 @@ class GapSeqTabWidget(QWidget):
                                            "box_std": data.box_std.tolist(),
                                            "box_std_local_background": data.box_std_local_background.tolist(),
                                            "box_std_global_background": data.box_std_global_background.tolist(),
-                                           "box_range": data.box_range.tolist(),
-                                           "box_range_local_background": data.box_range_local_background.tolist(),
-                                           "box_range_global_background": data.box_range_global_background.tolist(),
                                            "gaussian_height": data.gaussian_height.tolist(),
                                            "gaussian_x": data.gaussian_x.tolist(),
                                            "gaussian_y": data.gaussian_y.tolist(),
@@ -2083,8 +2072,7 @@ class GapSeqTabWidget(QWidget):
 
     def get_gapseq_trace_data(self, layer, localisation_number, plot_metric_index = 0, background_subtraction_mode = 0):
 
-        plot_metric_dict = {0: "box_mean", 1: "box_std", 2: "box_range",
-                            3: "gaussian_height", 4: "gausian_width"}
+        plot_metric_dict = {0: "box_mean", 1: "box_std", 2: "gaussian_height", 3: "gausian_width"}
 
         plot_metric = plot_metric_dict[plot_metric_index]
 

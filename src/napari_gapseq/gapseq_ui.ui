@@ -14,7 +14,7 @@
    <string>TabWidget</string>
   </property>
   <property name="currentIndex">
-   <number>3</number>
+   <number>0</number>
   </property>
   <widget class="QWidget" name="tab_localisations">
    <attribute name="title">
@@ -1015,11 +1015,6 @@
         </item>
         <item>
          <property name="text">
-          <string>Bounding Box Range</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
           <string>Gaussian Height</string>
          </property>
         </item>
@@ -1350,11 +1345,6 @@
         <item>
          <property name="text">
           <string>Bouding Box Standard Deviation</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Bounding Box Range</string>
          </property>
         </item>
         <item>
