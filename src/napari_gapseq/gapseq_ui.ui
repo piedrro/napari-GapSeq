@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>511</width>
-    <height>851</height>
+    <height>857</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -1013,16 +1013,6 @@
           <string>Bouding Box Standard Deviation</string>
          </property>
         </item>
-        <item>
-         <property name="text">
-          <string>Gaussian Height</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Gaussain Width</string>
-         </property>
-        </item>
        </widget>
       </item>
      </layout>
@@ -1345,16 +1335,6 @@
         <item>
          <property name="text">
           <string>Bouding Box Standard Deviation</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Gaussian Height</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Gaussain Width</string>
          </property>
         </item>
        </widget>
