@@ -1612,111 +1612,6 @@ class GapSeqTabWidget(QWidget):
 
         return background_image, masked_image
 
-    def compute_plot_data_mp(self):
-
-        if "bounding_boxes" in self.viewer.layers:
-
-            if len(self.box_layer.data) > 1:
-
-                worker = Worker(self.compute_plot_data)
-                worker.signals.result.connect(self.process_plot_data)
-                worker.signals.progress.connect(partial(self.gapseq_progressbar, progressbar="compute"))
-                self.threadpool.start(worker)
-
-    def process_plot_data(self, plot_data):
-
-        meta = self.box_layer.metadata.copy()
-
-        meta["bounding_box_data"] = plot_data["bounding_box_data"]
-        meta["layer_image_shape"] = plot_data["layer_image_shape"]
-        meta["image_layers"] = plot_data["image_layers"]
-        meta["background_data"] = plot_data["background_data"]
-        meta["bounding_box_breakpoints"] = plot_data["bounding_box_breakpoints"]
-        meta["bounding_box_traces"] = plot_data["bounding_box_traces"]
-
-        self.box_layer.metadata = meta
-
-        self.plot_graphs()
-        self.plot_fit_graph()
-
-    def compute_plot_data(self, progress_callback):
-
-        image_layers = [layer.name for layer in self.viewer.layers if
-                        layer.name not in ["bounding_boxes", "localisation_threshold"]]
-        bounding_boxes = self.box_layer.data.copy()
-        meta = self.box_layer.metadata.copy()
-
-        bounding_box_centres = meta["bounding_box_centres"]
-        bounding_box_class = meta["bounding_box_class"]
-        bounding_box_size = meta["bounding_box_size"]
-        layer_image_shape = {}
-        bounding_box_data = {}
-        bounding_box_breakpoints = {}
-        bounding_box_traces = {}
-        background_data = {}
-
-        num_iter = len(image_layers)*len(bounding_boxes)
-        iter_count = 0
-
-        for i in range(len(image_layers)):
-
-            try:
-
-                with warnings.catch_warnings():
-                    warnings.filterwarnings("ignore", category=RuntimeWarning)
-
-                    image = self.viewer.layers[image_layers[i]].data
-                    layer = image_layers[i]
-                    bounding_box_data[layer] = []
-                    bounding_box_breakpoints[layer] = []
-                    bounding_box_traces[layer] = []
-                    layer_image_shape[layer] = image.shape
-
-                    background_image, masked_image = self.get_background_mask(bounding_boxes, bounding_box_size, bounding_box_centres, image)
-
-                    background_data[layer]= {"global_background": np.mean(background_image,axis=(1, 2)).tolist(),
-                                             "local_background": []}
-
-                    for j in range(len(bounding_boxes)):
-
-                        iter_count += 1
-
-                        progress = int(iter_count/num_iter * 100)
-                        progress_callback.emit(progress)
-
-                        polygon = bounding_boxes[j]
-                        [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = polygon
-                        cx,cy = bounding_box_centres[j]
-                        box_class = bounding_box_class[j]
-                        box_size = bounding_box_size
-                        background_box_size = 20
-
-                        data = image[:, int(y1):int(y2), int(x1):int(x2)]
-                        data = np.nanmean(data, axis=(1, 2)).tolist()
-
-                        [[y1,x1],[y2,x2]] = [[cy - background_box_size, cx - background_box_size],
-                                             [cy + background_box_size, cx + background_box_size]]
-                        local_background_data = background_image[:, int(y1):int(y2), int(x1):int(x2)].copy()
-                        local_background_data = np.mean(local_background_data, axis=(1, 2)).tolist()
-
-                        bounding_box_data[layer].append(data)
-                        bounding_box_breakpoints[layer].append([])
-                        bounding_box_traces[layer].append([0]*len(data))
-                        background_data[layer]["local_background"].append(local_background_data)
-
-            except:
-                pass
-
-        compute_data = dict(bounding_box_data=bounding_box_data,
-                            layer_image_shape=layer_image_shape,
-                            image_layers=image_layers,
-                            background_data=background_data,
-                            bounding_box_breakpoints=bounding_box_breakpoints,
-                            bounding_box_traces=bounding_box_traces)
-
-
-        return compute_data
-
     def gapseq_progressbar(self, progress, progressbar):
 
         if progressbar == "compute":
@@ -2710,7 +2605,6 @@ class GapSeqTabWidget(QWidget):
 
         return image
 
-
     def import_localisation_image(self, meta = [], import_gapseq = False):
 
         # path = r"C:/napari-gapseq/src/napari_gapseq/dev/20220527_27thMay2022GAP36A/27thMay2022GAPSeq4onebyonesubstrategAPGS8FRETfoursea50nMconce2_GAPSeqonebyoneGAP36AL532Exp200.tif"
@@ -2833,6 +2727,14 @@ class GapSeqTabWidget(QWidget):
         if os.path.isfile(path):
 
             image, meta = self.read_image_file(path, crop_mode)
+
+            # img = self.stack_image(image)
+            #
+            # img = difference_of_gaussians(img, 1)
+            #
+            # img = normalize99(img)
+            # img = rescale01(img) * 255
+            # img = img.astype(np.uint8)
 
             meta["gap_code"] = gap_code
             meta["seq_code"] = seq_code
