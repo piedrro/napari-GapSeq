@@ -87,7 +87,7 @@ def gapseq_compute_traces(self, progress_callback, layer):
     bounding_box_size = meta["bounding_box_size"]
 
     image = self.viewer.layers[layer].data
-    background_image, masked_image = self.get_background_mask(bounding_boxes, bounding_box_size, bounding_box_centres, image)
+    background_image, masked_image = self.get_background_image(bounding_boxes, bounding_box_size, bounding_box_centres, image)
 
     shared_image_object = shared_memory.SharedMemory(create=True, size=image.nbytes)
     shared_image = np.ndarray(image.shape, dtype=image.dtype, buffer=shared_image_object.buf)

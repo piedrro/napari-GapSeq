@@ -7,31 +7,24 @@ see: https://napari.org/plugins/guides.html?#widgets
 Replace code below according to your needs.
 """
 
-from qtpy.QtWidgets import (QWidget,QVBoxLayout,QTabWidget,QCheckBox,QLabel,QLineEdit,QFileDialog,
-                            QComboBox,QPushButton,QProgressBar,QTextEdit,QSlider,QSpinBox, QSpacerItem, QSizePolicy)
-from PyQt5 import QtWidgets, QtCore
-from qtpy.QtCore import (QObject,QRunnable,QThreadPool,)
-from PyQt5.QtCore import pyqtSignal,pyqtSlot
+from qtpy.QtWidgets import (QWidget,QVBoxLayout,QTabWidget,QCheckBox,QLabel,QFileDialog,
+                            QComboBox,QPushButton,QProgressBar,QSlider,QSpinBox)
+from qtpy.QtCore import (QObject,QRunnable,QThreadPool)
+from PyQt5.QtCore import (pyqtSignal, pyqtSlot, Qt)
+
+
 import sys
 from functools import partial
 import os
 import traceback
 import napari
 import numpy as np
-import time
 import cv2
 import pandas as pd
-from skimage.filters import difference_of_gaussians
-from skimage.morphology import erosion, disk
-
 from glob2 import glob
-import tifffile
+
 import cv2 as cv
-from skimage import exposure
-# import pyqtgraph as pg
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Button
-from matplotlib.backends.backend_qt5agg import FigureCanvasQT
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 import time
 import json
@@ -40,18 +33,14 @@ import warnings
 from scipy.spatial import distance
 import ruptures as rpt
 import scipy
+
 plt.style.use('dark_background')
 
 from typing import TYPE_CHECKING
 from multiprocessing import Pool, shared_memory
 
-from magicgui import magic_factory
-from qtpy.QtWidgets import QHBoxLayout, QPushButton, QWidget
-
 if TYPE_CHECKING:
     import napari
-
-
 
 
 class WorkerSignals(QObject):
@@ -134,6 +123,8 @@ class Worker(QRunnable):
 
 def normalize99(X):
     """ normalize image so 0.0 is 0.01st percentile and 1.0 is 99.99th percentile """
+
+    from skimage import exposure
 
     if np.max(X) > 0:
         X = X.copy()
@@ -235,15 +226,19 @@ def stack_image(image, stack_mode):
 
     if stack_mode == 0:
 
-        image = np.mean(image,axis=0)
+        image = np.mean(image,axis=0).compute()
+        image = np.asarray(image)
 
     if stack_mode == 1:
 
-        image = np.max(image,axis=0)
+        image = np.max(image,axis=0).compute()
+        image = np.asarray(image)
 
     if stack_mode == 2:
 
-        image = np.std(image,axis=0)
+        image = np.std(image,axis=0).compute()
+        image = np.asarray(image)
+
 
     return image
 
@@ -297,7 +292,9 @@ def compute_undrift_localisations(image, box_centres, loc0_data=None, box_size=5
 
 def load_undrift_segment(index_list, path, crop_mode,stack_mode, box_centres, loc0_data=None):
 
-    with tifffile.TiffFile(path) as tif:
+    from tifffile import TiffFile
+
+    with TiffFile(path) as tif:
 
         img = [page.asarray() for index, page in enumerate(tif.pages) if index in index_list]
 
@@ -367,7 +364,9 @@ def process_loc_data(loc_data, n_frames):
 
 def undrift_image(index, path, drift, crop_mode):
 
-    with tifffile.TiffFile(path) as tif:
+    from tifffile import TiffFile
+
+    with TiffFile(path) as tif:
 
         img = np.array(tif.pages[index].asarray())
 
@@ -379,6 +378,8 @@ def undrift_image(index, path, drift, crop_mode):
 
 
 class json_np_encoder(json.JSONEncoder):
+
+
     def default(self, obj):
         if isinstance(obj, np.int32):
             return int(obj)
@@ -512,7 +513,7 @@ class GapSeqTabWidget(QWidget):
         self.fit_graph_container.setLayout(QVBoxLayout())
         self.fit_graph_container.setMinimumWidth(100)
         self.fit_graph_canvas = FigureCanvasQTAgg()
-        self.fit_graph_canvas.setFocusPolicy(QtCore.Qt.ClickFocus)
+        self.fit_graph_canvas.setFocusPolicy(Qt.ClickFocus)
         self.fit_graph_canvas.setFocus()
         self.fit_graph_canvas.figure.set_tight_layout(True)
         self.fit_graph_canvas.figure.patch.set_facecolor("#262930")
@@ -609,7 +610,8 @@ class GapSeqTabWidget(QWidget):
         self.fit_active.clicked.connect(partial(self.change_point_detection_mp, detection_mode="active"))
         self.fit_all.clicked.connect(partial(self.change_point_detection_mp, detection_mode="all"))
 
-        self.threshold_image_channel.currentIndexChanged.connect(self.threshold_active_image)
+        self.threshold_image_channel.currentIndexChanged.connect(partial(self.change_active_layer, mode = "threshold_image_channel"))
+        self.localisation_image_channel.currentIndexChanged.connect(partial(self.change_active_layer, mode="localisation_image_channel"))
 
         self.fit_localisation_number.valueChanged.connect(self.plot_fit_graph)
         self.fit_plot_channel.currentIndexChanged.connect(self.plot_fit_graph)
@@ -639,6 +641,19 @@ class GapSeqTabWidget(QWidget):
 
         # self.import_localisation_image()
         # self.detect_localisations()
+
+
+
+        # path = r"C:\napari-gapseq\src\napari_gapseq\dev\undrift_files\HJ_XCy3B_RFP_R-FP-A_100ms_1uMRFP_12g_RFP.tif"
+        #
+        # # stack = imread(path)
+        #
+        # stack = tifffile.imread(path)
+        #
+        # napari.view_image(stack, contrast_limits=[0, 2000], multiscale=False)
+
+
+
 
 
     def import_localisation_data(self):
@@ -692,7 +707,6 @@ class GapSeqTabWidget(QWidget):
                     localisation_slider.setValue(localisation_number)
 
 
-
     def threshold_active_image(self):
 
         image_layers = [layer.name for layer in self.viewer.layers if layer.name not in ["bounding_boxes", "localisation_threshold"]]
@@ -705,13 +719,7 @@ class GapSeqTabWidget(QWidget):
 
             image = self.image_dict[layer]["threshold_image"].copy()
 
-            for image_layer in image_layers:
-                self.viewer.layers[image_layer].selected = False
-
-            layer_index = self.viewer.layers.index(layer)
-            self.viewer.layers.move(layer_index, -1)
-            layer_index = self.viewer.layers.index("bounding_boxes")
-            self.viewer.layers.move(layer_index, -1)
+            self.change_active_layer(layer)
 
             _, threshold_mask = cv.threshold(image, threshold_value, 255, cv.THRESH_BINARY)
 
@@ -720,6 +728,30 @@ class GapSeqTabWidget(QWidget):
             self.change_view_mode(mode="threshold_mask", layer=layer)
 
             self.image_dict[layer]["threshold_value"] = threshold_value
+
+
+    def change_active_layer(self, layer = "", mode = ""):
+
+        image_layers = [layer.name for layer in self.viewer.layers if layer.name not in ["bounding_boxes", "localisation_threshold"]]
+
+        if mode == "threshold_image_channel":
+            layer = self.threshold_image_channel.currentText()
+        if mode == "localisation_image_channel":
+            layer = self.localisation_image_channel.currentText()
+
+        if layer in image_layers:
+            for image_layer in image_layers:
+                self.viewer.layers[image_layer].selected = False
+
+            layer_index = self.viewer.layers.index(layer)
+            self.viewer.layers.move(layer_index, -1)
+            layer_index = self.viewer.layers.index("bounding_boxes")
+            self.viewer.layers.move(layer_index, -1)
+
+            self.autocontrast(layer=layer)
+
+
+
 
     def change_view_mode(self, key=None, mode="image", layer = ""):
 
@@ -740,7 +772,6 @@ class GapSeqTabWidget(QWidget):
                     img = self.image_dict[layer]["threshold_image"]
 
                     self.viewer.layers[layer].data = img
-                    self.viewer.layers[layer].contrast_limits = (np.min(img), np.max(img))
                     self.viewer.reset_view()
 
                 if mode == "threshold_mask":
@@ -751,7 +782,6 @@ class GapSeqTabWidget(QWidget):
                     img = self.image_dict[layer]["threshold_mask"]
 
                     self.viewer.layers[layer].data = img
-                    self.viewer.layers[layer].contrast_limits = (np.min(img), np.max(img))
                     self.viewer.reset_view()
 
                 if mode == "image":
@@ -762,7 +792,6 @@ class GapSeqTabWidget(QWidget):
                         self.image_dict[layer]["image"] = []
 
                         self.viewer.layers[layer].data = img
-                        self.viewer.layers[layer].contrast_limits = (np.min(img), np.max(img))
                         self.viewer.reset_view()
 
         if mode == "threshold_image":
@@ -772,10 +801,17 @@ class GapSeqTabWidget(QWidget):
         if mode == "image":
             self.image_view_mode = "image"
 
+        self.autocontrast()
+
 
     def initialise_plot_compute(self):
 
         if "bounding_boxes" in self.viewer.layers:
+
+            image_layers = [layer.name for layer in self.viewer.layers if layer.name not in ["bounding_boxes", "localisation_threshold"]]
+
+            for layer in image_layers:
+                self.change_view_mode(mode="threshold_image")
 
             if len(self.box_layer.data) > 1:
                 worker = Worker(self.compute_plot_data)
@@ -832,33 +868,27 @@ class GapSeqTabWidget(QWidget):
         bounding_box_centres = meta["bounding_box_centres"]
         bounding_box_size = meta["bounding_box_size"]
 
-        num_iter = len(image_layers)*len(bounding_boxes)
+        num_iter = len(image_layers)*len(bounding_boxes)*2
         iter_count = 0
 
         localisation_data = {}
 
-        for i in range(len(image_layers)):
+        try:
 
-            try:
+            for i in range(len(image_layers)):
 
                 with warnings.catch_warnings():
                     warnings.filterwarnings("ignore", category=RuntimeWarning)
 
                     layer = image_layers[i]
 
-                    if self.image_dict[layer]["image"] != []:
-                        image = self.image_dict[layer]["image"]
-                    else:
-                        image = self.viewer.layers[layer].data
-
-                    threshold_mask = self.image_dict[layer]["threshold_mask"]
-
                     localisation_data[layer] = []
 
-                    background_image, masked_image = self.get_background_mask(bounding_boxes, bounding_box_size, bounding_box_centres, image, threshold_mask)
+                    image = self.image_dict[layer].pop('image')
+                    self.image_dict[layer]["image"] = []
 
-                    box_mean_local_background = np.nanmean(background_image, axis=(1, 2)).tolist()
-                    box_std_local_background = np.nanstd(background_image, axis=(1, 2)).tolist()
+                    threshold_mask = self.image_dict[layer]["threshold_mask"]
+                    background_mask = self.get_background_mask(bounding_boxes, bounding_box_centres, bounding_box_size, threshold_mask)
 
                     for j in range(len(bounding_boxes)):
 
@@ -870,29 +900,68 @@ class GapSeqTabWidget(QWidget):
                         polygon = bounding_boxes[j]
                         [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = polygon
                         cx,cy = bounding_box_centres[j]
-
                         background_box_size = 10
-
-                        img = image[:, int(y1):int(y2), int(x1):int(x2)]
 
                         [[by1,bx1],[by2,bx2]] = [[cy - background_box_size, cx - background_box_size],
                                                  [cy + background_box_size, cx + background_box_size]]
 
-                        local_background = background_image[:, int(by1):int(by2), int(bx1):int(bx2)].copy()
+
+                        img = image[:, int(y1):int(y2), int(x1):int(x2)].copy()
+
+                        mask = background_mask[int(by1):int(by2), int(bx1):int(bx2)].copy()
+                        local_background = image[:, int(by1):int(by2), int(bx1):int(bx2)].copy()
+
+                        local_background[:, mask == 255] = 0
+
+                        if local_background.shape[-1] == 0:
+                            local_background = np.zeros_like(img)
 
                         localisation_data[layer].append({"box_mean" : np.nanmean(img, axis=(1, 2)).tolist(),
-                                                         "box_mean_global_background" : np.nanmean(local_background, axis=(1, 2)).tolist(),
-                                                         "box_mean_local_background" : box_mean_local_background,
+                                                         "box_mean_global_background" : [],
+                                                         "box_mean_local_background" : np.nanmean(local_background, axis=(1, 2)).tolist(),
                                                          "box_std" : np.nanstd(img, axis=(1, 2)).tolist(),
-                                                         "box_std_global_background" : np.nanstd(local_background, axis=(1, 2)).tolist(),
-                                                         "box_std_local_background" : box_std_local_background,
+                                                         "box_std_global_background" : [],
+                                                         "box_std_local_background" : np.nanstd(local_background, axis=(1, 2)).tolist(),
                                                          "bounding_box" : polygon.tolist(),
                                                          "image_shape" : image.shape})
 
+                    self.image_dict[layer]["image"] = image
 
-            except:
-                print(traceback.format_exc())
-                pass
+            for layer in image_layers:
+
+                with warnings.catch_warnings():
+
+                    warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+                    image = self.image_dict[layer].pop('image')
+                    self.image_dict[layer]["image"] = []
+
+                    for frame in range(image.shape[0]):
+
+                        iter_count += (len(bounding_boxes) * ((frame+1)/image.shape[0]))
+
+                        progress = int(iter_count / num_iter * 100)
+                        progress_callback.emit(progress)
+
+                        img = image[frame].copy()
+
+                        background_mask = self.get_background_mask(bounding_boxes, bounding_box_centres, bounding_box_size, threshold_mask)
+
+                        img[background_mask==255] = 0
+
+                        box_mean_global_background = np.nanmean(img)
+                        box_std_global_background = np.nanstd(img)
+
+                        for i in range(len(bounding_boxes)):
+
+                            localisation_data[layer][j]["box_mean_global_background"] = box_mean_global_background
+                            localisation_data[layer][j]["box_std_global_background"] = box_std_global_background
+
+                    self.image_dict[layer]["image"] = image
+
+
+        except:
+            print(traceback.format_exc())
 
 
         return localisation_data
@@ -927,6 +996,8 @@ class GapSeqTabWidget(QWidget):
 
     def gapseq_undrift(self, progress_callback):
 
+        from tifffile import TiffFile
+
         undrift_layer = self.undrift_image_channel.currentText()
 
         n_frame_average = int(self.localisation_frame_averaging.currentText())
@@ -936,7 +1007,7 @@ class GapSeqTabWidget(QWidget):
         stack_mode = self.viewer.layers[undrift_layer].metadata["stack_mode"]
         path = self.viewer.layers[undrift_layer].metadata["image_path"]
 
-        tif = tifffile.TiffFile(path)
+        tif = TiffFile(path)
 
         n_frames = len(tif.pages)
         n_segments = n_frames//n_frame_average
@@ -1116,7 +1187,7 @@ class GapSeqTabWidget(QWidget):
 
         if "bounding_boxes" in self.viewer.layers:
 
-            if "bounding_box_data" in self.meta.keys():
+            if "localisation_data" in self.meta.keys():
 
                 localisation_number = self.plot_localisation_number.value()
 
@@ -1128,8 +1199,7 @@ class GapSeqTabWidget(QWidget):
                 bounding_box_centres = meta["bounding_box_centres"]
                 bounding_box_class = meta["bounding_box_class"]
                 nucleotide_class = meta["nucleotide_class"]
-                bounding_box_data = meta["bounding_box_data"]
-                background_data = meta["background_data"]
+                localisation_data = meta["localisation_data"]
 
                 if localisation_number is not None:
 
@@ -1138,15 +1208,12 @@ class GapSeqTabWidget(QWidget):
                     del bounding_box_class[localisation_number]
                     del nucleotide_class[localisation_number]
 
-                    for layer in bounding_box_data.keys():
-
-                        del bounding_box_data[layer][localisation_number]
-                        del background_data[layer]["local_background"][localisation_number]
+                    for layer in localisation_data.keys():
+                        del localisation_data[layer][localisation_number]
 
                     meta["bounding_box_centres"] = bounding_box_centres
                     meta["bounding_box_class"] = bounding_box_class
-                    meta["bounding_box_data"] = bounding_box_data
-                    meta["background_data"] = background_data
+                    meta["localisation_data"] = localisation_data
                     meta["nucleotide_class"] = nucleotide_class
 
                     self.box_layer.data = bounding_boxes
@@ -1156,6 +1223,7 @@ class GapSeqTabWidget(QWidget):
                     self.fit_localisation_number.setMaximum(len(bounding_boxes) - 1)
 
                     self.plot_graphs()
+                    self.plot_fit_graph()
 
     def keybind_classify_nucleotide(self, viewer, key):
 
@@ -1489,6 +1557,8 @@ class GapSeqTabWidget(QWidget):
                 self.viewer.layers["bounding_boxes"].data = bounding_boxes
                 self.viewer.layers["bounding_boxes"].metadata = meta
 
+                self.viewer.layers["bounding_boxes"].selected = False
+
             else:
 
                 if meta["localisation_type"] == "Box":
@@ -1500,6 +1570,8 @@ class GapSeqTabWidget(QWidget):
 
                     self.box_layer = self.viewer.add_shapes(bounding_boxes, name="bounding_boxes", shape_type='Ellipse',edge_width=1, edge_color='red', face_color=[0, 0, 0, 0],opacity=0.3,metadata=meta)
                     self.box_layer.mouse_drag_callbacks.append(self.localisation_click_events)
+
+                self.viewer.layers["bounding_boxes"].selected = False
 
             self.meta = meta
             self.sort_layer_order()
@@ -1587,7 +1659,7 @@ class GapSeqTabWidget(QWidget):
                     with open(path, 'w', encoding='utf-8') as f:
                         json.dump(gapseq_data, f, ensure_ascii=False, indent=4, cls = json_np_encoder)
 
-    def get_background_mask(self, bounding_boxes, bounding_box_size, bounding_box_centres, image, threshold_mask):
+    def get_background_image(self, bounding_boxes, bounding_box_size, bounding_box_centres, image, threshold_mask):
 
         bounding_boxes = self.box_layer.data.copy()
         shape_type = np.unique(self.box_layer.shape_type)[0]
@@ -1617,8 +1689,33 @@ class GapSeqTabWidget(QWidget):
             background_image[background_mask == 255] = 0
             masked_image[background_mask != 255] = 0
 
-
         return background_image, masked_image
+
+
+    def get_background_mask(self, bounding_boxes, bounding_box_centres, bounding_box_size, threshold_mask):
+
+        shape_type = np.unique(self.box_layer.shape_type)[0]
+
+        kernel = np.ones((3, 3), np.uint8)
+        background_mask = cv.dilate(threshold_mask, kernel, iterations=1)
+
+        for i in range(len(bounding_boxes)):
+
+            polygon = bounding_boxes[i]
+            [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = polygon
+            cx, cy = bounding_box_centres[i]
+            box_size = bounding_box_size
+
+            if shape_type == "rectangle":
+                background_mask[int(y1):int(y2), int(x1):int(x2)] = 255
+            if shape_type == "ellipse":
+                cv.circle(background_mask, (cx, cy), box_size, 255, -1)
+
+        return background_mask
+
+
+
+
 
     def gapseq_progressbar(self, progress, progressbar):
 
@@ -2061,11 +2158,7 @@ class GapSeqTabWidget(QWidget):
             if layer in self.viewer.layers:
 
                 self.change_view_mode(mode="image")
-
-                layer_index = self.viewer.layers.index(layer)
-                num_layers = len(self.viewer.layers) - 1
-
-                self.viewer.layers.move(layer_index, num_layers)
+                self.change_active_layer(layer=layer)
 
     def get_gapseq_trace_data(self, layer, localisation_number, plot_metric_index = 0, background_subtraction_mode = 0):
 
@@ -2377,12 +2470,12 @@ class GapSeqTabWidget(QWidget):
 
         if len(image_layers) > 0:
 
-            threshold_image_channel = self.localisation_image_channel.currentText()
+            localisation_image_channel = self.localisation_image_channel.currentText()
             localisation_area_min_value = self.localisation_area_min.value()
             localisation_area_max_value = self.localisation_area_max.value()
             bounding_box_size = self.localisation_bbox_size.value()
 
-            threshold_mask = self.image_dict[threshold_image_channel]["threshold_mask"].copy()
+            threshold_mask = self.image_dict[localisation_image_channel]["threshold_mask"].copy()
 
             meta = self.meta
 
@@ -2392,6 +2485,8 @@ class GapSeqTabWidget(QWidget):
             bounding_box_centres = []
             bounding_box_class = []
             nucleotide_class = []
+
+            self.change_active_layer(localisation_image_channel)
 
             for i in range(len(contours)):
 
@@ -2443,7 +2538,7 @@ class GapSeqTabWidget(QWidget):
                 meta["bounding_box_size"] = bounding_box_size
                 meta["nucleotide_class"] = nucleotide_class
                 meta["localisation_type"] = self.localisation_type.currentText()
-                meta["localisation_path"] = self.viewer.layers[threshold_image_channel].metadata["path"]
+                meta["localisation_path"] = self.viewer.layers[localisation_image_channel].metadata["path"]
 
                 self.plot_localisation_number.setMaximum(len(bounding_boxes)-1)
 
@@ -2462,10 +2557,10 @@ class GapSeqTabWidget(QWidget):
 
     def fit_localisations(self):
 
-        threshold_image_channel = self.threshold_image_channel.currentText()
+        localisation_image_channel = self.localisation_image_channel.currentText()
 
-        threshold_image = self.image_dict[threshold_image_channel]["threshold_image"].copy()
-        threshold_mask = self.image_dict[threshold_image_channel]["threshold_mask"].copy()
+        threshold_image = self.image_dict[localisation_image_channel]["threshold_image"].copy()
+        threshold_mask = self.image_dict[localisation_image_channel]["threshold_mask"].copy()
 
         aspect_ratio_max = int(self.localisation_aspect_ratio.value())/10
 
@@ -2475,7 +2570,7 @@ class GapSeqTabWidget(QWidget):
         bounding_box_size = meta["bounding_box_size"]
         bounding_box_centres = meta["bounding_box_centres"]
 
-        background_image, masked_image = self.get_background_mask(bounding_boxes, bounding_box_size, bounding_box_centres, threshold_image, threshold_mask)
+        background_image, masked_image = self.get_background_image(bounding_boxes, bounding_box_size, bounding_box_centres, threshold_image, threshold_mask)
 
         fitted_bounding_boxes = []
         fitted_bounding_box_centres = []
@@ -2590,6 +2685,9 @@ class GapSeqTabWidget(QWidget):
 
     def import_localisation_image(self, meta = [], import_gapseq = False):
 
+        from skimage.morphology import erosion, disk
+        from skimage.filters import difference_of_gaussians
+
         # path = r"C:/napari-gapseq/src/napari_gapseq/dev/20220527_27thMay2022GAP36A/27thMay2022GAPSeq4onebyonesubstrategAPGS8FRETfoursea50nMconce2_GAPSeqonebyoneGAP36AL532Exp200.tif"
         # # path = r"C:/napari-gapseq/src/napari_gapseq/dev/20220527_27thMay2022GAP36A/27thMay2022GAPSeq4onebyonesubstrategAPGS8FRETfoursea50nMconce2_GAPSeqonebyoneGAP36AL532Exp200_locImage.tiff"
         # crop_mode = self.localisation_channel.currentIndex()
@@ -2691,13 +2789,15 @@ class GapSeqTabWidget(QWidget):
 
             self.plot_frame_number.setMaximum(image.shape[0]-1)
             self.fit_plot_channel.addItems(["localisation_image"])
-            self.viewer.reset_view()
             self.sort_layer_order()
+            self.viewer.reset_view()
 
 
 
 
     def import_image_file(self, import_gapseq=False, localisation_image = False, path = "", meta = {}):
+
+        from skimage.filters import difference_of_gaussians
 
         if import_gapseq == False:
 
@@ -2788,6 +2888,8 @@ class GapSeqTabWidget(QWidget):
                 self.viewer.layers[layer_name].mouse_drag_callbacks.append(self.localisation_click_events)
 
             self.sort_layer_order()
+            self.viewer.reset_view()
+            self.autocontrast(layer = layer_name)
 
 
     def sort_layer_order(self):
@@ -2803,16 +2905,18 @@ class GapSeqTabWidget(QWidget):
 
     def read_image_file(self, path, crop_mode=0):
 
+        from tifffile import TiffFile, imread
+
         image_name = os.path.basename(path)
 
-        with tifffile.TiffFile(path) as tif:
+        with TiffFile(path) as tif:
             try:
                 metadata = tif.pages[0].tags["ImageDescription"].value
                 metadata = json.loads(metadata)
             except:
                 metadata = {}
 
-            image = tifffile.imread(path)
+        image = imread(path)
 
         if len(image.shape) < 3:
             image = np.expand_dims(image, axis=0)
@@ -2864,6 +2968,18 @@ class GapSeqTabWidget(QWidget):
 
         return img
 
+    def autocontrast(self, layer = ""):
+
+        if layer == "":
+            image_layers = [layer.name for layer in self.viewer.layers]
+            layer = image_layers[-1]
+
+        if layer != "bounding_boxes":
+            current_frame = int(self.viewer.dims.current_step[0])
+            img = self.viewer.layers[layer].data[current_frame]
+
+            self.viewer.layers[layer].contrast_limits = [np.min(img), np.max(img)]
+
     def update_slider_label(self, slider_name):
 
         label_name = slider_name + "_label"
@@ -2885,107 +3001,4 @@ class GapSeqTabWidget(QWidget):
 
             self.label.setText(str(slider_value))
 
-    # def compute_plot_data_mp(self):
-    #
-    #         if "bounding_boxes" in self.viewer.layers:
-    #
-    #             if len(self.box_layer.data) > 1:
-    #
-    #                 worker = Worker(self.compute_plot_data)
-    #                 worker.signals.result.connect(self.process_plot_data)
-    #                 worker.signals.progress.connect(partial(self.gapseq_progressbar, progressbar="compute"))
-    #                 self.threadpool.start(worker)
-    #
-    # def process_plot_data(self, plot_data):
-    #
-    #     meta = self.box_layer.metadata.copy()
-    #
-    #     meta["bounding_box_data"] = plot_data["bounding_box_data"]
-    #     meta["layer_image_shape"] = plot_data["layer_image_shape"]
-    #     meta["image_layers"] = plot_data["image_layers"]
-    #     meta["background_data"] = plot_data["background_data"]
-    #     meta["bounding_box_breakpoints"] = plot_data["bounding_box_breakpoints"]
-    #     meta["bounding_box_traces"] = plot_data["bounding_box_traces"]
-    #
-    #     self.box_layer.metadata = meta
-    #
-    #     self.plot_graphs()
-    #     self.plot_fit_graph()
-    #
-    # def compute_plot_data(self, progress_callback):
-    #
-    #     image_layers = [layer.name for layer in self.viewer.layers if
-    #                     layer.name not in ["bounding_boxes", "localisation_threshold"]]
-    #     bounding_boxes = self.box_layer.data.copy()
-    #     meta = self.box_layer.metadata.copy()
-    #
-    #     bounding_box_centres = meta["bounding_box_centres"]
-    #     bounding_box_class = meta["bounding_box_class"]
-    #     bounding_box_size = meta["bounding_box_size"]
-    #     layer_image_shape = {}
-    #     bounding_box_data = {}
-    #     bounding_box_breakpoints = {}
-    #     bounding_box_traces = {}
-    #     background_data = {}
-    #
-    #     num_iter = len(image_layers)*len(bounding_boxes)
-    #     iter_count = 0
-    #
-    #     for i in range(len(image_layers)):
-    #
-    #         try:
-    #
-    #             with warnings.catch_warnings():
-    #                 warnings.filterwarnings("ignore", category=RuntimeWarning)
-    #
-    #                 image = self.viewer.layers[image_layers[i]].data
-    #                 layer = image_layers[i]
-    #                 bounding_box_data[layer] = []
-    #                 bounding_box_breakpoints[layer] = []
-    #                 bounding_box_traces[layer] = []
-    #                 layer_image_shape[layer] = image.shape
-    #
-    #                 background_image, masked_image = self.get_background_mask(bounding_boxes, bounding_box_size, bounding_box_centres, image)
-    #
-    #                 background_data[layer]= {"global_background": np.mean(background_image,axis=(1, 2)).tolist(),
-    #                                          "local_background": []}
-    #
-    #                 for j in range(len(bounding_boxes)):
-    #
-    #                     iter_count += 1
-    #
-    #                     progress = int(iter_count/num_iter * 100)
-    #                     progress_callback.emit(progress)
-    #
-    #                     polygon = bounding_boxes[j]
-    #                     [[y2, x1], [y1, x1], [y2, x2], [y1, x2]] = polygon
-    #                     cx,cy = bounding_box_centres[j]
-    #                     box_class = bounding_box_class[j]
-    #                     box_size = bounding_box_size
-    #                     background_box_size = 20
-    #
-    #                     data = image[:, int(y1):int(y2), int(x1):int(x2)]
-    #                     data = np.nanmean(data, axis=(1, 2)).tolist()
-    #
-    #                     [[y1,x1],[y2,x2]] = [[cy - background_box_size, cx - background_box_size],
-    #                                          [cy + background_box_size, cx + background_box_size]]
-    #                     local_background_data = background_image[:, int(y1):int(y2), int(x1):int(x2)].copy()
-    #                     local_background_data = np.mean(local_background_data, axis=(1, 2)).tolist()
-    #
-    #                     bounding_box_data[layer].append(data)
-    #                     bounding_box_breakpoints[layer].append([])
-    #                     bounding_box_traces[layer].append([0]*len(data))
-    #                     background_data[layer]["local_background"].append(local_background_data)
-    #
-    #         except:
-    #             pass
-    #
-    #     compute_data = dict(bounding_box_data=bounding_box_data,
-    #                         layer_image_shape=layer_image_shape,
-    #                         image_layers=image_layers,
-    #                         background_data=background_data,
-    #                         bounding_box_breakpoints=bounding_box_breakpoints,
-    #                         bounding_box_traces=bounding_box_traces)
-    #
-    #
-    #     return compute_data
+
