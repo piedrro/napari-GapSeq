@@ -671,41 +671,43 @@ class GapSeqTabWidget(QWidget):
 
         image_layers = [layer.name for layer in self.viewer.layers if layer.name not in ["bounding_boxes", "localisation_threshold"]]
 
-        self.change_view_mode(mode="threshold_image")
-        stack_mode = self.image_stack_mode.currentIndex()
-        stack_min_frame = self.image_stack_min_frame.value()
-        stack_max_frame = self.image_stack_max_frame.value()
+        if len(image_layers) > 0:
 
-        from skimage.filters import difference_of_gaussians
+            self.change_view_mode(mode="threshold_image")
+            stack_mode = self.image_stack_mode.currentIndex()
+            stack_min_frame = self.image_stack_min_frame.value()
+            stack_max_frame = self.image_stack_max_frame.value()
 
-        for layer in image_layers:
+            from skimage.filters import difference_of_gaussians
 
-            meta = self.viewer.layers[layer].metadata.copy()
-            meta["stack_mode"] = stack_mode
-            meta["stack_min_frame"] = stack_min_frame
-            meta["stack_max_frame"] = stack_max_frame
+            for layer in image_layers:
 
-            image = self.image_dict[layer].pop('image')
-            self.image_dict[layer]["image"] = []
+                meta = self.viewer.layers[layer].metadata.copy()
+                meta["stack_mode"] = stack_mode
+                meta["stack_min_frame"] = stack_min_frame
+                meta["stack_max_frame"] = stack_max_frame
 
-            stack_image = self.stack_image(image, stack_mode=stack_mode,
-                                           stack_min_frame = stack_min_frame,
-                                           stack_max_frame = stack_max_frame)
+                image = self.image_dict[layer].pop('image')
+                self.image_dict[layer]["image"] = []
 
-            stack_image = difference_of_gaussians(stack_image, 1)
+                stack_image = self.stack_image(image, stack_mode=stack_mode,
+                                               stack_min_frame = stack_min_frame,
+                                               stack_max_frame = stack_max_frame)
 
-            stack_image = normalize99(stack_image)
-            stack_image = rescale01(stack_image) * 255
-            stack_image = stack_image.astype(np.uint8)
+                stack_image = difference_of_gaussians(stack_image, 1)
 
-            self.viewer.layers[layer].data = stack_image
-            self.viewer.layers[layer].metadata = meta
+                stack_image = normalize99(stack_image)
+                stack_image = rescale01(stack_image) * 255
+                stack_image = stack_image.astype(np.uint8)
 
-            self.image_dict[layer]["image"] = image
-            self.image_dict[layer]["threshold_image"] = stack_image
-            self.image_dict[layer]["stack_mode"] = stack_mode
-            self.image_dict[layer]["stack_min_frame"] = stack_min_frame
-            self.image_dict[layer]["stack_max_frame"] = stack_max_frame
+                self.viewer.layers[layer].data = stack_image
+                self.viewer.layers[layer].metadata = meta
+
+                self.image_dict[layer]["image"] = image
+                self.image_dict[layer]["threshold_image"] = stack_image
+                self.image_dict[layer]["stack_mode"] = stack_mode
+                self.image_dict[layer]["stack_min_frame"] = stack_min_frame
+                self.image_dict[layer]["stack_max_frame"] = stack_max_frame
 
 
     def import_localisation_data(self):

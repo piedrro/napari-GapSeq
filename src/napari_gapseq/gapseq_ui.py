@@ -127,6 +127,7 @@ class Ui_TabWidget(object):
         self.gridLayout_2.setObjectName("gridLayout_2")
         self.image_stack_max_frame = QtWidgets.QSpinBox(self.tab_images)
         self.image_stack_max_frame.setMinimum(-1)
+        self.image_stack_max_frame.setMaximum(1000)
         self.image_stack_max_frame.setProperty("value", -1)
         self.image_stack_max_frame.setObjectName("image_stack_max_frame")
         self.gridLayout_2.addWidget(self.image_stack_max_frame, 0, 1, 1, 1)
