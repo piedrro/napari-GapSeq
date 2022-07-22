@@ -222,22 +222,31 @@ def crop_image(img, crop_mode=0):
                 img = imgR
     return img
 
-def stack_image(image, stack_mode):
+def stack_image(image, stack_mode, stack_min_frame = 0, stack_max_frame = -1):
 
-    if stack_mode == 0:
+    if stack_max_frame > image.shape[0]:
+        stack_min_frame = image.shape[0]
+    if stack_max_frame == 0:
+        stack_max_frame = 1
 
-        image = np.mean(image,axis=0).compute()
-        image = np.asarray(image)
+    image = image[stack_min_frame:stack_max_frame]
 
-    if stack_mode == 1:
+    if len(image.shape) > 2:
 
-        image = np.max(image,axis=0).compute()
-        image = np.asarray(image)
+        if stack_mode == 0:
 
-    if stack_mode == 2:
+            image = np.mean(image,axis=0).compute()
+            image = np.asarray(image)
 
-        image = np.std(image,axis=0).compute()
-        image = np.asarray(image)
+        if stack_mode == 1:
+
+            image = np.max(image,axis=0).compute()
+            image = np.asarray(image)
+
+        if stack_mode == 2:
+
+            image = np.std(image,axis=0).compute()
+            image = np.asarray(image)
 
 
     return image
@@ -458,6 +467,8 @@ class GapSeqTabWidget(QWidget):
         self.image_import_channel = self.findChild(QComboBox,"image_import_channel")
         self.undrift_image_channel = self.findChild(QComboBox,"undrift_image_channel")
         self.image_stack_mode = self.findChild(QComboBox,"image_stack_mode")
+        self.image_stack_min_frame = self.findChild(QSpinBox, "image_stack_min_frame")
+        self.image_stack_max_frame = self.findChild(QSpinBox, "image_stack_max_frame")
         self.image_threshold = self.findChild(QSlider,"image_threshold")
         self.threshold_image_channel = self.findChild(QComboBox,"threshold_image_channel")
         self.view_image = self.findChild(QPushButton,"view_image")
@@ -471,7 +482,6 @@ class GapSeqTabWidget(QWidget):
 
         self.import_localisation = self.findChild(QPushButton, "import_localisation")
         self.localisation_channel = self.findChild(QComboBox,"localisation_channel")
-
 
         self.current_coord = None
 
@@ -619,6 +629,8 @@ class GapSeqTabWidget(QWidget):
         self.update_cpd_controls()
 
         self.image_stack_mode.currentIndexChanged.connect(self.recompute_threshold_image)
+        self.image_stack_min_frame.valueChanged.connect(self.recompute_threshold_image)
+        self.image_stack_max_frame.valueChanged.connect(self.recompute_threshold_image)
 
         self.view_image.clicked.connect(partial(self.change_view_mode, mode="image"))
         self.view_threshold_image.clicked.connect(partial(self.change_view_mode, mode="threshold_image"))
@@ -661,6 +673,8 @@ class GapSeqTabWidget(QWidget):
 
         self.change_view_mode(mode="threshold_image")
         stack_mode = self.image_stack_mode.currentIndex()
+        stack_min_frame = self.image_stack_min_frame.value()
+        stack_max_frame = self.image_stack_max_frame.value()
 
         from skimage.filters import difference_of_gaussians
 
@@ -668,11 +682,15 @@ class GapSeqTabWidget(QWidget):
 
             meta = self.viewer.layers[layer].metadata.copy()
             meta["stack_mode"] = stack_mode
+            meta["stack_min_frame"] = stack_min_frame
+            meta["stack_max_frame"] = stack_max_frame
 
             image = self.image_dict[layer].pop('image')
             self.image_dict[layer]["image"] = []
 
-            stack_image = self.stack_image(image, stack_mode=stack_mode)
+            stack_image = self.stack_image(image, stack_mode=stack_mode,
+                                           stack_min_frame = stack_min_frame,
+                                           stack_max_frame = stack_max_frame)
 
             stack_image = difference_of_gaussians(stack_image, 1)
 
@@ -686,6 +704,8 @@ class GapSeqTabWidget(QWidget):
             self.image_dict[layer]["image"] = image
             self.image_dict[layer]["threshold_image"] = stack_image
             self.image_dict[layer]["stack_mode"] = stack_mode
+            self.image_dict[layer]["stack_min_frame"] = stack_min_frame
+            self.image_dict[layer]["stack_max_frame"] = stack_max_frame
 
 
     def import_localisation_data(self):
@@ -2699,22 +2719,33 @@ class GapSeqTabWidget(QWidget):
 
         return p
 
-    def stack_image(self, image, stack_mode = -1):
+    def stack_image(self, image, stack_mode = -1, stack_min_frame = 0, stack_max_frame = -1):
 
-        if stack_mode == -1:
-            stack_mode = self.localisation_stack_mode.currentIndex()
+        if stack_max_frame > image.shape[0]:
+            stack_min_frame = image.shape[0]
+        if stack_max_frame == 0:
+            stack_max_frame = 1
 
-        if stack_mode == 0:
+        image = image[stack_min_frame:stack_max_frame]
 
-            image = np.mean(image,axis=0)
+        if image.shape[0] > 1:
 
-        if stack_mode == 1:
+            if stack_mode == -1:
+                stack_mode = self.image_stack_mode.currentIndex()
 
-            image = np.max(image,axis=0)
+            if stack_mode == 0:
 
-        if stack_mode == 2:
+                image = np.mean(image,axis=0)
 
-            image = np.std(image,axis=0)
+            if stack_mode == 1:
+
+                image = np.max(image,axis=0)
+
+            if stack_mode == 2:
+
+                image = np.std(image,axis=0)
+        else:
+            image = image[0]
 
         return image
 
@@ -2744,9 +2775,13 @@ class GapSeqTabWidget(QWidget):
             desktop = os.path.expanduser("~/Desktop")
             path, _ = QFileDialog.getOpenFileName(self, "Open Files", desktop, "NIM Image File (*.tif);; NIM Localisation File (*.tiff)")
 
+        print(path)
+
         if os.path.isfile(path):
 
             if "_locImage" in path:
+
+                print(True)
 
                 image, meta = self.read_image_file(path, 0)
                 meta["crop_mode"] = 0
@@ -2754,6 +2789,8 @@ class GapSeqTabWidget(QWidget):
                 image = np.moveaxis(image, -1, 0)
 
                 img = self.stack_image(image).astype(np.uint8)
+
+                print(image.shape,img.shape)
 
                 img = difference_of_gaussians(img, 1)
 
@@ -2833,6 +2870,7 @@ class GapSeqTabWidget(QWidget):
     def import_image_file(self, import_gapseq=False, localisation_image = False, path = "", meta = {}):
 
         from skimage.filters import difference_of_gaussians
+        from skimage.morphology import erosion, disk
 
         if import_gapseq == False:
 
@@ -2841,6 +2879,8 @@ class GapSeqTabWidget(QWidget):
             gap_code = self.image_gap_code.currentText()
             seq_code = self.image_sequence_code.currentText()
             threshold = self.image_threshold.value()
+            stack_min_frame = self.image_stack_min_frame.value()
+            stack_max_frame = self.image_stack_max_frame.value()
 
             if path == "":
                 desktop = os.path.expanduser("~/Desktop")
@@ -2867,17 +2907,43 @@ class GapSeqTabWidget(QWidget):
 
         if os.path.isfile(path):
 
-            image, img_meta = self.read_image_file(path, crop_mode)
+            if "_locImage" in path:
 
-            stack_image = self.stack_image(image, stack_mode=stack_mode)
+                image, img_meta = self.read_image_file(path, 0)
+                img_meta["crop_mode"] = 0
 
-            stack_image = difference_of_gaussians(stack_image, 1)
+                image = np.moveaxis(image, -1, 0)
 
-            stack_image = normalize99(stack_image)
-            stack_image = rescale01(stack_image) * 255
-            stack_image = stack_image.astype(np.uint8)
+                stack_image = self.stack_image(image, stack_mode=stack_mode,
+                                           stack_min_frame = stack_min_frame,
+                                           stack_max_frame = stack_max_frame)
 
-            _, threshold_image = cv.threshold(stack_image, threshold, 255, cv.THRESH_BINARY)
+                stack_image = difference_of_gaussians(stack_image, 1)
+
+                stack_image = normalize99(stack_image)
+                stack_image = rescale01(stack_image) * 255
+                stack_image = stack_image.astype(np.uint8)
+
+                _, threshold_image = cv.threshold(stack_image, threshold, 255, cv.THRESH_BINARY)
+
+                footprint = disk(1)
+                threshold_image = erosion(threshold_image, footprint)
+
+            else:
+
+                image, img_meta = self.read_image_file(path, crop_mode)
+
+                stack_image = self.stack_image(image, stack_mode=stack_mode,
+                                           stack_min_frame = stack_min_frame,
+                                           stack_max_frame = stack_max_frame)
+
+                stack_image = difference_of_gaussians(stack_image, 1)
+
+                stack_image = normalize99(stack_image)
+                stack_image = rescale01(stack_image) * 255
+                stack_image = stack_image.astype(np.uint8)
+
+                _, threshold_image = cv.threshold(stack_image, threshold, 255, cv.THRESH_BINARY)
 
             img_meta["gap_code"] = gap_code
             img_meta["seq_code"] = seq_code
@@ -2886,12 +2952,16 @@ class GapSeqTabWidget(QWidget):
             img_meta["path"] = path
             img_meta["threshold"] = threshold
             img_meta["layer_name"] = layer_name
+            img_meta["stack_min_frame"] = stack_min_frame
+            img_meta["stack_max_frame"] = stack_max_frame
 
             self.image_dict[layer_name] = dict(threshold_image = stack_image,
                                                threshold_mask = threshold_image,
                                                image = [],
                                                crop_mode = crop_mode,
                                                stack_mode = stack_mode,
+                                               stack_min_frame = stack_min_frame,
+                                               stack_max_frame = stack_max_frame,
                                                path = path)
 
             if layer_name in self.viewer.layers:
