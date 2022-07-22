@@ -618,6 +618,8 @@ class GapSeqTabWidget(QWidget):
         self.fit_background_subtraction_mode.currentIndexChanged.connect(self.plot_fit_graph)
         self.update_cpd_controls()
 
+        self.image_stack_mode.currentIndexChanged.connect(self.recompute_threshold_image)
+
         self.view_image.clicked.connect(partial(self.change_view_mode, mode="image"))
         self.view_threshold_image.clicked.connect(partial(self.change_view_mode, mode="threshold_image"))
         self.view_threshold_mask.clicked.connect(partial(self.change_view_mode, mode="threshold_mask"))
@@ -653,7 +655,37 @@ class GapSeqTabWidget(QWidget):
         # napari.view_image(stack, contrast_limits=[0, 2000], multiscale=False)
 
 
+    def recompute_threshold_image(self):
 
+        image_layers = [layer.name for layer in self.viewer.layers if layer.name not in ["bounding_boxes", "localisation_threshold"]]
+
+        self.change_view_mode(mode="threshold_image")
+        stack_mode = self.image_stack_mode.currentIndex()
+
+        from skimage.filters import difference_of_gaussians
+
+        for layer in image_layers:
+
+            meta = self.viewer.layers[layer].metadata.copy()
+            meta["stack_mode"] = stack_mode
+
+            image = self.image_dict[layer].pop('image')
+            self.image_dict[layer]["image"] = []
+
+            stack_image = self.stack_image(image, stack_mode=stack_mode)
+
+            stack_image = difference_of_gaussians(stack_image, 1)
+
+            stack_image = normalize99(stack_image)
+            stack_image = rescale01(stack_image) * 255
+            stack_image = stack_image.astype(np.uint8)
+
+            self.viewer.layers[layer].data = stack_image
+            self.viewer.layers[layer].metadata = meta
+
+            self.image_dict[layer]["image"] = image
+            self.image_dict[layer]["threshold_image"] = stack_image
+            self.image_dict[layer]["stack_mode"] = stack_mode
 
 
     def import_localisation_data(self):
@@ -706,7 +738,6 @@ class GapSeqTabWidget(QWidget):
                 if localisation_number <= localisation_slider.maximum():
                     localisation_slider.setValue(localisation_number)
 
-
     def threshold_active_image(self):
 
         image_layers = [layer.name for layer in self.viewer.layers if layer.name not in ["bounding_boxes", "localisation_threshold"]]
@@ -730,6 +761,10 @@ class GapSeqTabWidget(QWidget):
             self.image_dict[layer]["threshold_value"] = threshold_value
 
 
+
+
+
+
     def change_active_layer(self, layer = "", mode = ""):
 
         image_layers = [layer.name for layer in self.viewer.layers if layer.name not in ["bounding_boxes", "localisation_threshold"]]
@@ -750,9 +785,6 @@ class GapSeqTabWidget(QWidget):
 
             self.autocontrast(layer=layer)
 
-
-
-
     def change_view_mode(self, key=None, mode="image", layer = ""):
 
         if layer != "":
@@ -772,6 +804,7 @@ class GapSeqTabWidget(QWidget):
                     img = self.image_dict[layer]["threshold_image"]
 
                     self.viewer.layers[layer].data = img
+                    self.autocontrast(layer=layer)
                     self.viewer.reset_view()
 
                 if mode == "threshold_mask":
@@ -782,6 +815,7 @@ class GapSeqTabWidget(QWidget):
                     img = self.image_dict[layer]["threshold_mask"]
 
                     self.viewer.layers[layer].data = img
+                    self.autocontrast(layer=layer)
                     self.viewer.reset_view()
 
                 if mode == "image":
@@ -792,6 +826,7 @@ class GapSeqTabWidget(QWidget):
                         self.image_dict[layer]["image"] = []
 
                         self.viewer.layers[layer].data = img
+                        self.autocontrast(layer=layer)
                         self.viewer.reset_view()
 
         if mode == "threshold_image":
@@ -2975,10 +3010,13 @@ class GapSeqTabWidget(QWidget):
             layer = image_layers[-1]
 
         if layer != "bounding_boxes":
+
             current_frame = int(self.viewer.dims.current_step[0])
             img = self.viewer.layers[layer].data[current_frame]
 
-            self.viewer.layers[layer].contrast_limits = [np.min(img), np.max(img)]
+            contrast_limit = [np.min(img), np.max(img)]
+
+            self.viewer.layers[layer].contrast_limits = contrast_limit
 
     def update_slider_label(self, slider_name):
 
